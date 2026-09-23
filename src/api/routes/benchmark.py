@@ -49,15 +49,15 @@ async def run_benchmark(request: BenchmarkRequest):
             dataset = SignaturePairDataset('data', pairs_per_epoch=50)
             signers = list(dataset.signer_ids)
 
-            # Positive pairs (same signer, label 0)
-            for signer in signers[:5]:
+            # Positive pairs (same signer, label 0) - ALL signers
+            for signer in signers:
                 images = dataset.genuine_by_signer[signer]
                 if len(images) >= 2:
                     pairs.append((str(images[0]), str(images[1]), 0))
                     signer_ids.append(signer)
 
-            # Negative pairs (different signers, label 1)
-            for i in range(min(5, len(signers) - 1)):
+            # Negative pairs (different signers, label 1) - ALL signers
+            for i in range(len(signers) - 1):
                 img1 = dataset.genuine_by_signer[signers[i]][0]
                 img2 = dataset.genuine_by_signer[signers[i + 1]][0]
                 pairs.append((str(img1), str(img2), 1))
@@ -67,6 +67,7 @@ async def run_benchmark(request: BenchmarkRequest):
 
         # If no real pairs, use synthetic
         if len(pairs) < 4:
+            print('No real data, using synthetic...')
             tmpdir = tempfile.mkdtemp()
             data_dir = Path(tmpdir)
             for signer_idx in range(5):
@@ -85,26 +86,28 @@ async def run_benchmark(request: BenchmarkRequest):
             dataset = SignaturePairDataset(str(data_dir), pairs_per_epoch=50)
             signers = list(dataset.signer_ids)
 
-            # Positive pairs
-            for signer in signers[:5]:
+            for signer in signers:
                 images = dataset.genuine_by_signer[signer]
                 if len(images) >= 2:
                     pairs.append((str(images[0]), str(images[1]), 0))
                     signer_ids.append(signer)
 
-            # Negative pairs
-            for i in range(min(5, len(signers) - 1)):
+            for i in range(len(signers) - 1):
                 img1 = dataset.genuine_by_signer[signers[i]][0]
                 img2 = dataset.genuine_by_signer[signers[i + 1]][0]
                 pairs.append((str(img1), str(img2), 1))
                 signer_ids.append(signers[i])
+
+        print(f'Total pairs: {len(pairs)}')
+        print(f'Positive (label 0): {sum(1 for p in pairs if p[2] == 0)}')
+        print(f'Negative (label 1): {sum(1 for p in pairs if p[2] == 1)}')
 
         harness = BenchmarkHarness(
             config=config,
             n_folds=request.n_folds,
             accuracy_threshold=request.accuracy_threshold,
         )
-        results = harness.run(pairs, signer_ids, verbose=False)
+        results = harness.run(pairs, signer_ids, verbose=True)
         run_id = harness.log_to_db('api_benchmark')
 
         return BenchmarkResponse(
@@ -117,7 +120,10 @@ async def run_benchmark(request: BenchmarkRequest):
             passed=harness.regression_test(),
         )
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get('/runs')
 async def list_runs(limit: int = 10):

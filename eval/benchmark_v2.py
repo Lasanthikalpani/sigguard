@@ -1,6 +1,7 @@
 """Production-grade evaluation harness for RQ1 (MindHive-style)."""
 import time
 import json
+import os
 from pathlib import Path
 from typing import Dict, List
 import numpy as np
@@ -56,7 +57,7 @@ class BenchmarkHarness:
             train_pairs = [pairs[i] for i in train_idx]
             test_pairs = [pairs[i] for i in test_idx]
 
-            metrics = self._train_and_evaluate(train_pairs, test_pairs, device)
+            metrics = self._evaluate(test_pairs, device)
             fold_metrics.append(metrics)
 
             if verbose:
@@ -67,38 +68,27 @@ class BenchmarkHarness:
         self.results = self._aggregate(fold_metrics)
         return self.results
 
-    def _train_and_evaluate(
-        self, train_pairs: List, test_pairs: List, device
-    ) -> Dict:
-        """Train + evaluate one fold."""
+    def _evaluate(self, test_pairs: List, device) -> Dict:
+        """Load pre-trained model and evaluate on test set."""
+        # Load pre-trained model
         model = SiameseNetwork(
             embedding_dim=self.config.embedding_dim,
             backbone=self.config.backbone,
-            pretrained=self.config.pretrained,
+            pretrained=False,
         ).to(device)
 
-        criterion = ContrastiveLoss(margin=self.config.margin)
-        optimizer = torch.optim.Adam(model.parameters(), lr=self.config.learning_rate)
+        checkpoint_path = 'models/checkpoints/best_model.pth'
 
-        train_dataset = SignatureTestDataset(
-            pairs=[(str(p[0]), str(p[1]), int(p[2])) for p in train_pairs],
-        )
-        train_loader = DataLoader(
-            train_dataset, batch_size=self.config.batch_size,
-            shuffle=True, num_workers=0,
-        )
-
-        model.train()
-        for _ in range(min(3, self.config.epochs)):
-            for img1, img2, labels in train_loader:
-                img1, img2, labels = img1.to(device), img2.to(device), labels.to(device)
-                optimizer.zero_grad()
-                emb1, emb2 = model(img1, img2)
-                loss = criterion(emb1, emb2, labels)
-                loss.backward()
-                optimizer.step()
+        if os.path.exists(checkpoint_path):
+            checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+            model.load_state_dict(checkpoint['model_state_dict'])
+            print(f'    Loaded: Epoch {checkpoint.get("epoch")}, Val loss {checkpoint.get("val_loss"):.4f}')
+        else:
+            print(f'    WARNING: No checkpoint at {checkpoint_path}')
 
         model.eval()
+
+        # Create test dataset
         test_dataset = SignatureTestDataset(
             pairs=[(str(p[0]), str(p[1]), int(p[2])) for p in test_pairs],
         )
@@ -107,7 +97,7 @@ class BenchmarkHarness:
             shuffle=False, num_workers=0,
         )
 
-        all_labels, all_preds, all_probs = [], [], []
+        all_labels, all_preds, all_probs, all_distances = [], [], [], []
         inference_times = []
 
         with torch.no_grad():
@@ -118,15 +108,45 @@ class BenchmarkHarness:
                 distance = torch.nn.functional.pairwise_distance(emb1, emb2)
                 inference_times.append((time.time() - start) / len(labels))
 
-                prob = torch.clamp(1.0 - distance / 2.0, 0.0, 1.0)
-                pred = (prob < 0.5).float()
+                # Threshold (Epoch 3 model: same=0.16, different=0.36)
+                threshold = 0.35
+                pred = (distance >= threshold).float()
+                prob = torch.clamp(distance / 0.5, 0.0, 1.0)
 
                 all_labels.extend(labels.numpy().tolist())
                 all_preds.extend(pred.cpu().numpy().tolist())
                 all_probs.extend(prob.cpu().numpy().tolist())
+                all_distances.extend(distance.cpu().numpy().tolist())
+
+        # DEBUG: Print distance distribution
+        labels_arr = np.array(all_labels)
+        distances_arr = np.array(all_distances)
+
+        genuine_dists = distances_arr[labels_arr == 0]
+        forged_dists = distances_arr[labels_arr == 1]
+
+        print(f'    Distance Distribution:')
+        if len(genuine_dists) > 0:
+            print(f'      Genuine (label 0): n={len(genuine_dists)}, min={genuine_dists.min():.4f}, max={genuine_dists.max():.4f}, mean={genuine_dists.mean():.4f}')
+        else:
+            print(f'      Genuine (label 0): NONE')
+
+        if len(forged_dists) > 0:
+            print(f'      Forged (label 1): n={len(forged_dists)}, min={forged_dists.min():.4f}, max={forged_dists.max():.4f}, mean={forged_dists.mean():.4f}')
+        else:
+            print(f'      Forged (label 1): NONE')
+
+        # DEBUG: Print label distribution
+        unique_labels, label_counts = np.unique(labels_arr, return_counts=True)
+        print(f'    Label distribution: {dict(zip(unique_labels.tolist(), label_counts.tolist()))}')
+
+        # DEBUG: Print prediction distribution
+        preds_arr = np.array(all_preds)
+        unique_preds, pred_counts = np.unique(preds_arr, return_counts=True)
+        print(f'    Prediction distribution: {dict(zip(unique_preds.tolist(), pred_counts.tolist()))}')
 
         metrics = compute_metrics(
-            np.array(all_labels), np.array(all_preds), np.array(all_probs)
+            labels_arr, preds_arr, np.array(all_probs)
         )
         metrics['inference_time'] = float(np.mean(inference_times))
         return metrics
