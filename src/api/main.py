@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 from src.models.siamese import SiameseNetwork
 from src.data.preprocess import SignaturePreprocessor
-
+from src.api.routes import benchmark
 
 state = {}
 
@@ -57,6 +57,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Benchmark router
+app.include_router(benchmark.router)
 
 class VerificationResponse(BaseModel):
     model_config = {"protected_namespaces": ()}
