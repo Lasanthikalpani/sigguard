@@ -294,8 +294,13 @@ def _train_with_synthetic(config: TrainingConfig, device: torch.device) -> dict:
 
 if __name__ == '__main__':
     config = TrainingConfig()
-    config.epochs = 5
-    config.pairs_per_epoch = 100
+    config.epochs = 50               # Full training
+    config.pairs_per_epoch = 500     # More pairs
+    config.batch_size = 32           # Larger batch
+    config.learning_rate = 5e-4      # Higher LR
+    config.early_stopping_patience = 15
+    config.scheduler_patience = 5
+    config.scheduler_factor = 0.5
 
     results = train(config)
     print(f'\nResults: {results}')
