@@ -1,2 +1,4 @@
 ﻿
 httpx==0.24.1
+
+python-multipart==0.0.6

@@ -31,13 +31,10 @@ jobs:
           pip install fastapi "uvicorn[standard]" sqlalchemy pydantic
           pip install scikit-learn requests pyyaml
           pip install pytest pytest-cov
-          pip install httpx
+          pip install httpx python-multipart
 
       - name: Install sigguard package
         run: pip install -e .
-
-      - name: Verify pytest
-        run: python -m pytest --version
 
       - name: Run tests
         run: python -m pytest tests/ -v
