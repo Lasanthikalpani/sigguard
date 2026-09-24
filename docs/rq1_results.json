@@ -1,0 +1,16 @@
+{
+  "rq1": {
+    "accuracy": 0.935,
+    "precision": 0.935,
+    "recall": 0.935,
+    "f1": 0.935,
+    "auc_roc": 0.9718,
+    "inference_time_ms": 108.68518352508545,
+    "inference_time_p99_ms": 220.65610170364383,
+    "best_threshold": 0.12110078520370862,
+    "genuine_mean_dist": 0.09819494761759415,
+    "forged_mean_dist": 0.14608209516853093,
+    "test_pairs": 400,
+    "all_targets_met": true
+  }
+}
