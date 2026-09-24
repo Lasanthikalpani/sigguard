@@ -1,0 +1,38 @@
+{
+  "train": [
+    "signer_13",
+    "signer_14",
+    "signer_18",
+    "signer_19",
+    "signer_22",
+    "signer_32",
+    "signer_33",
+    "signer_37",
+    "signer_38",
+    "signer_39",
+    "signer_4",
+    "signer_41",
+    "signer_42",
+    "signer_43",
+    "signer_44",
+    "signer_47",
+    "signer_48",
+    "signer_52",
+    "signer_53",
+    "signer_6",
+    "signer_9"
+  ],
+  "val": [
+    "signer_16",
+    "signer_20",
+    "signer_51",
+    "signer_7"
+  ],
+  "test": [
+    "signer_11",
+    "signer_15",
+    "signer_21",
+    "signer_45",
+    "signer_49"
+  ]
+}

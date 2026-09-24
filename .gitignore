@@ -73,3 +73,7 @@ secrets/
 
 # Jupyter
 .ipynb_checkpoints/
+
+data/splits_v2/
+data/splits/
+data/test_data/

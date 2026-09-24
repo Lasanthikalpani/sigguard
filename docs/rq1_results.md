@@ -16,13 +16,11 @@ How accurately and efficiently can a Siamese CNN with few-shot learning detect s
 
 \### Dataset
 
-\- Base images: 550 (55 signers x 10 signatures)
+\- Signer-based split: 21/4/5 (train/val/test)
 
-\- Augmented: 4,950 (55 signers x 90 images)
+\- Total signers: 30
 
-\- Signer-based split: 38/8/9 (train/val/test)
-
-\- Augmentation: rotation, scale, translate, shear, brightness, noise, blur
+\- Augmented images: 2,700 (from 1,350 base + augmentation)
 
 
 
@@ -34,12 +32,6 @@ How accurately and efficiently can a Siamese CNN with few-shot learning detect s
 
 \- Loss: Contrastive Loss (margin=1.0)
 
-\- Optimizer: Adam (lr=1e-4)
-
-\- Best epoch: 4
-
-\- Best val loss: 0.1872
-
 
 
 \### Training
@@ -48,13 +40,11 @@ How accurately and efficiently can a Siamese CNN with few-shot learning detect s
 
 \- Epochs: 30
 
-\- Batch size: 64
-
 \- Training time: 9.3 minutes
 
 
 
-\## Results (Local Verification)
+\## Results (Signer-Based Split)
 
 
 
@@ -62,37 +52,37 @@ How accurately and efficiently can a Siamese CNN with few-shot learning detect s
 
 |--------|--------|----------|--------|
 
-| Accuracy | >= 92% | 93.50% | PASS |
+| Accuracy | >= 92% | 94.75% | PASS |
 
-| Precision | >= 90% | 93.50% | PASS |
+| Precision | >= 90% | 93.24% | PASS |
 
-| Recall | >= 90% | 93.50% | PASS |
+| Recall | >= 90% | 96.50% | PASS |
 
-| F1-Score | >= 90% | 93.50% | PASS |
+| F1-Score | >= 90% | 94.84% | PASS |
 
-| AUC-ROC | >= 0.95 | 0.9718 | PASS |
+| AUC-ROC | >= 0.95 | 0.9820 | PASS |
 
-| Inference Time (avg) | <= 2s | 108.69 ms | PASS |
+| Inference Time (avg) | <= 2s | 98.37 ms | PASS |
 
-| Inference Time (P99) | <= 2s | 220.66 ms | PASS |
+| Inference Time (P99) | <= 2s | 157.78 ms | PASS |
 
 
 
 \### Distance Distribution
 
-\- Genuine pairs: mean=0.0982, std=0.0216
+\- Genuine pairs: mean=0.1072, std=0.0203
 
-\- Forged pairs: mean=0.1461, std=0.0168
+\- Forged pairs: mean=0.1637, std=0.0268
 
-\- Separation: 0.0479
+\- Separation: 0.0565
 
 
 
 \### Optimal Threshold
 
-\- Best threshold: 0.1211
+\- Best threshold: 0.1358
 
-\- Best F1: 0.9350
+\- Best F1: 0.9484
 
 
 
@@ -100,19 +90,23 @@ How accurately and efficiently can a Siamese CNN with few-shot learning detect s
 
 \- Total pairs: 400 (200 genuine + 200 forged)
 
-\- Source: data/splits/test (405 genuine + 405 forged images)
+\- Source: data/splits\_v2/test (225 genuine + 225 forged images)
+
+\- Test signers: signer\_11, signer\_15, signer\_21, signer\_45, signer\_49
 
 
 
-\## Deployment
+\## UI Verification
 
-\- API: FastAPI with /verify endpoint
 
-\- Frontend: Streamlit dashboard
 
-\- Documentation: Swagger UI
+| Test | Verdict | Distance | Time |
 
-\- Verification: Genuine pair (0.0206), Forged pair (0.1842)
+|------|---------|----------|------|
+
+| Genuine (signer\_11) | genuine | \~0.05 | \~100 ms |
+
+| Forged (signer\_11) | forged | 0.1774 | 348 ms |
 
 
 
@@ -120,5 +114,5 @@ How accurately and efficiently can a Siamese CNN with few-shot learning detect s
 
 
 
-All RQ1 targets were met or exceeded. The Siamese CNN with few-shot learning successfully detects signature forgeries with 93.50% accuracy, 0.9718 AUC-ROC, and 108.69 ms inference time.
+All RQ1 targets were met. The Siamese CNN with few-shot learning successfully detects signature forgeries with 94.75% accuracy, 0.9820 AUC-ROC, and 98.37 ms inference time.
 
