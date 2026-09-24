@@ -12,7 +12,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 MODEL_PATH = Path('models/checkpoints/sigguard_v2/best_model.pth')
-TEST_DIR = Path('data/splits/test')
+TEST_DIR = Path('data/splits_v2/test')
 OUTPUT_FILE = Path('docs/rq1_results.json')
 
 from src.models.siamese import SiameseNetwork

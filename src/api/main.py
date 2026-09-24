@@ -140,7 +140,7 @@ async def verify_signature(
             emb1, emb2 = model(ref_tensor, test_tensor)
             distance = torch.nn.functional.pairwise_distance(emb1, emb2).item()
 
-        threshold = 0.1365
+        threshold = 0.1358
         verdict = "genuine" if distance < threshold else "forged"
         confidence = max(0.0, min(1.0, 1.0 - distance))
         inference_time = (time.time() - start) * 1000
