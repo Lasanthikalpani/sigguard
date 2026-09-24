@@ -16,14 +16,14 @@ class TrainingConfig:
     margin: float = 1.0
 
     # Training
-    epochs: int = 50
+    epochs: int = 5
     batch_size: int = 16
     learning_rate: float = 1e-4
     weight_decay: float = 1e-5
 
     # Data
-    data_dir: str = 'data'
-    pairs_per_epoch: int = 1000
+    data_dir: str = 'data/splits/train'
+    pairs_per_epoch: int = 500
     positive_ratio: float = 0.5
     num_workers: int = 0
 
