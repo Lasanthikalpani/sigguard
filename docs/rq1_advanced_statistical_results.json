@@ -1,0 +1,110 @@
+{
+  "rq1_advanced": {
+    "basic_metrics": {
+      "accuracy": 0.937,
+      "precision": 0.9177820267686424,
+      "recall": 0.96,
+      "f1": 0.9384164222873901,
+      "auc_roc": 0.975284,
+      "best_threshold": 0.13612196170062363,
+      "test_pairs": 1000
+    },
+    "bootstrap_ci": {
+      "n_iterations": 10000,
+      "accuracy_ci_95": [
+        0.922,
+        0.952
+      ],
+      "f1_ci_95": [
+        0.9227440141667794,
+        0.9532163742690059
+      ],
+      "auc_roc_ci_95": [
+        0.9659869844130704,
+        0.9834871510894726
+      ]
+    },
+    "permutation_test": {
+      "n_permutations": 10000,
+      "p_value": 0.0,
+      "significant_at_0.05": true
+    },
+    "cross_validation": {
+      "n_folds": 5,
+      "accuracy_mean": 0.9400000000000001,
+      "accuracy_std": 0.019999999999999976,
+      "f1_mean": 0.9424069172065546,
+      "f1_std": 0.017941439371229436,
+      "auc_roc_mean": 0.97528,
+      "auc_roc_std": 0.00875383344598239
+    },
+    "signal_decay": [
+      {
+        "delta": 0.0,
+        "threshold": 0.13612196170062363,
+        "accuracy": 0.937
+      },
+      {
+        "delta": 0.01,
+        "threshold": 0.14612196170062364,
+        "accuracy": 0.882
+      },
+      {
+        "delta": 0.02,
+        "threshold": 0.15612196170062362,
+        "accuracy": 0.81
+      },
+      {
+        "delta": 0.05,
+        "threshold": 0.18612196170062362,
+        "accuracy": 0.534
+      },
+      {
+        "delta": 0.1,
+        "threshold": 0.23612196170062363,
+        "accuracy": 0.511
+      },
+      {
+        "delta": 0.15,
+        "threshold": 0.28612196170062365,
+        "accuracy": 0.511
+      },
+      {
+        "delta": 0.2,
+        "threshold": 0.33612196170062364,
+        "accuracy": 0.503
+      }
+    ],
+    "separability": {
+      "snr": 1.5509309492695469,
+      "cohens_d": 2.193347582761172,
+      "d_prime": 2.193347582761172,
+      "genuine_mean": 0.10816267045401037,
+      "genuine_std": 0.022087729697370162,
+      "forged_mean": 0.16479708674550056,
+      "forged_std": 0.029078853666396,
+      "separation": 0.056634416291490186
+    },
+    "capacity": {
+      "inference_time_avg_ms": 90.50789833068848,
+      "inference_time_p50_ms": 92.93210506439209,
+      "inference_time_p95_ms": 110.11708974838257,
+      "inference_time_p99_ms": 112.4239230155945,
+      "throughput_req_per_sec": 11.048759483358044,
+      "daily_capacity": 954612,
+      "model_size_mb": 45.450279
+    },
+    "feature_importance": {
+      "easiest_signers": [
+        "signer_45",
+        "signer_11",
+        "signer_21"
+      ],
+      "hardest_signers": [
+        "signer_15",
+        "signer_49",
+        "signer_45"
+      ]
+    }
+  }
+}
