@@ -1,0 +1,18 @@
+{
+  "per_signer_accuracy": {
+    "signer_11": 1.0,
+    "signer_21": 1.0,
+    "signer_45": 0.7273,
+    "signer_49": 0.5455,
+    "signer_15": 0.4545
+  },
+  "mean": 0.7455,
+  "std": 0.2404,
+  "min": 0.4545,
+  "max": 1.0,
+  "hard_signers": [
+    "signer_15",
+    "signer_49",
+    "signer_45"
+  ]
+}
