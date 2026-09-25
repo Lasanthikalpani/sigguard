@@ -1,0 +1,29 @@
+{
+  "rq1": {
+    "accuracy": 0.9475,
+    "accuracy_ci_95": [
+      0.921078024928725,
+      0.9654084716420795
+    ],
+    "precision": 0.9323671497584541,
+    "recall": 0.965,
+    "f1": 0.9484029484029484,
+    "auc_roc": 0.981975,
+    "best_threshold": 0.13577026528910027,
+    "test_pairs": 400,
+    "statistical_significance": {
+      "t_statistic": 18.336858635420196,
+      "p_value": 5.203426383133619e-05,
+      "significant_at_0.05": true,
+      "cohens_d": 12.966117086764738,
+      "interpretation": "large"
+    },
+    "distance_distribution": {
+      "genuine_mean": 0.10724216513801366,
+      "genuine_std": 0.02028314328242587,
+      "forged_mean": 0.16369281575083733,
+      "forged_std": 0.026778182135053605,
+      "separation": 0.05645065061282367
+    }
+  }
+}
