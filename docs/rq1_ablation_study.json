@@ -1,0 +1,98 @@
+{
+  "ablation_results": {
+    "threshold": [
+      {
+        "value": 0.08,
+        "metrics": {
+          "accuracy": 0.54,
+          "precision": 0.5208333333333334,
+          "recall": 1.0,
+          "f1": 0.684931506849315,
+          "auc_roc": 0.981975
+        }
+      },
+      {
+        "value": 0.1,
+        "metrics": {
+          "accuracy": 0.6525,
+          "precision": 0.5899705014749262,
+          "recall": 1.0,
+          "f1": 0.7421150278293136,
+          "auc_roc": 0.981975
+        }
+      },
+      {
+        "value": 0.11,
+        "metrics": {
+          "accuracy": 0.79,
+          "precision": 0.704225352112676,
+          "recall": 1.0,
+          "f1": 0.8264462809917354,
+          "auc_roc": 0.981975
+        }
+      },
+      {
+        "value": 0.12,
+        "metrics": {
+          "accuracy": 0.89,
+          "precision": 0.819672131147541,
+          "recall": 1.0,
+          "f1": 0.9009009009009009,
+          "auc_roc": 0.981975
+        }
+      },
+      {
+        "value": 0.1358,
+        "metrics": {
+          "accuracy": 0.9475,
+          "precision": 0.9323671497584541,
+          "recall": 0.965,
+          "f1": 0.9484029484029484,
+          "auc_roc": 0.981975
+        }
+      },
+      {
+        "value": 0.15,
+        "metrics": {
+          "accuracy": 0.8825,
+          "precision": 0.9693251533742331,
+          "recall": 0.79,
+          "f1": 0.8705234159779613,
+          "auc_roc": 0.981975
+        }
+      },
+      {
+        "value": 0.18,
+        "metrics": {
+          "accuracy": 0.55,
+          "precision": 1.0,
+          "recall": 0.1,
+          "f1": 0.18181818181818182,
+          "auc_roc": 0.981975
+        }
+      },
+      {
+        "value": 0.2,
+        "metrics": {
+          "accuracy": 0.51,
+          "precision": 1.0,
+          "recall": 0.02,
+          "f1": 0.0392156862745098,
+          "auc_roc": 0.981975
+        }
+      },
+      {
+        "value": 0.25,
+        "metrics": {
+          "accuracy": 0.51,
+          "precision": 1.0,
+          "recall": 0.02,
+          "f1": 0.0392156862745098,
+          "auc_roc": 0.981975
+        }
+      }
+    ]
+  },
+  "best_threshold": 0.1358,
+  "test_pairs": 400
+}
