@@ -1,0 +1,84 @@
+{
+  "genuine_results": [
+    {
+      "signer": "signer_11",
+      "verdict": "genuine",
+      "distance": 0.004166557919234037,
+      "confidence": 0.995833442080766,
+      "inference_time_ms": 380.8557987213135
+    },
+    {
+      "signer": "signer_15",
+      "verdict": "genuine",
+      "distance": 0.028190720826387405,
+      "confidence": 0.9718092791736126,
+      "inference_time_ms": 305.6776523590088
+    },
+    {
+      "signer": "signer_21",
+      "verdict": "genuine",
+      "distance": 0.036514442414045334,
+      "confidence": 0.9634855575859547,
+      "inference_time_ms": 379.0545463562012
+    },
+    {
+      "signer": "signer_45",
+      "verdict": "genuine",
+      "distance": 0.04126095771789551,
+      "confidence": 0.9587390422821045,
+      "inference_time_ms": 343.32966804504395
+    },
+    {
+      "signer": "signer_49",
+      "verdict": "genuine",
+      "distance": 0.05737601965665817,
+      "confidence": 0.9426239803433418,
+      "inference_time_ms": 416.4412021636963
+    }
+  ],
+  "forged_results": [
+    {
+      "signer": "signer_11",
+      "verdict": "forged",
+      "distance": 0.17736035585403442,
+      "confidence": 0.8226396441459656,
+      "inference_time_ms": 293.0793762207031
+    },
+    {
+      "signer": "signer_15",
+      "verdict": "forged",
+      "distance": 0.13722990453243256,
+      "confidence": 0.8627700954675674,
+      "inference_time_ms": 317.2299861907959
+    },
+    {
+      "signer": "signer_21",
+      "verdict": "forged",
+      "distance": 0.18502894043922424,
+      "confidence": 0.8149710595607758,
+      "inference_time_ms": 307.5082302093506
+    },
+    {
+      "signer": "signer_45",
+      "verdict": "forged",
+      "distance": 0.18544691801071167,
+      "confidence": 0.8145530819892883,
+      "inference_time_ms": 382.892370223999
+    },
+    {
+      "signer": "signer_49",
+      "verdict": "genuine",
+      "distance": 0.1045478880405426,
+      "confidence": 0.8954521119594574,
+      "inference_time_ms": 351.0737419128418
+    }
+  ],
+  "summary": {
+    "genuine_correct": 5,
+    "genuine_total": 5,
+    "forged_correct": 4,
+    "forged_total": 5,
+    "total_correct": 9,
+    "total": 10
+  }
+}
