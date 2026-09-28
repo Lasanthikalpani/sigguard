@@ -77,3 +77,12 @@ secrets/
 data/splits_v2/
 data/splits/
 data/test_data/
+
+
+# Debug outputs
+debug_*.png
+debug_*.txt
+debug_*.py.bak
+
+# Test results (keep only docs/)
+*.test_results.tmp
