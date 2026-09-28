@@ -27,3 +27,9 @@ tenacity==8.2.3
 requests==2.31.0
 matplotlib==3.7.2
 seaborn==0.12.2
+
+# ============================================
+# RQ3: Hybrid QR + Cryptographic Verification
+# ============================================
+qrcode[pil]==7.4.2
+pyzbar==0.1.9

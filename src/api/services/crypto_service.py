@@ -1,0 +1,196 @@
+"""
+RQ3: Cryptographic Service
+SHA-256 hashing + HMAC signing for document integrity verification.
+
+Purpose: Provides tamper-evident authentication for Sri Lankan government documents.
+Target: >=95% tamper detection reliability.
+"""
+import hashlib
+import hmac
+import json
+import os
+from datetime import datetime
+from typing import Dict, Any, Optional
+
+
+class CryptoService:
+    """
+    Hybrid cryptographic service for document integrity.
+    
+    Combines:
+    - SHA-256 hashing (content integrity)
+    - HMAC-SHA256 signing (tamper evidence)
+    - Timestamp validation (freshness)
+    """
+    
+    def __init__(self, secret_key: Optional[str] = None):
+        """Initialize with secret key for HMAC signing."""
+        self.secret_key = (
+            secret_key or os.getenv("SECRET_KEY", "dev-secret-change-in-production")
+        ).encode("utf-8")
+        self.hash_algorithm = "sha256"
+        self.version = "1.0"
+    
+    # ============================================================
+    # HASHING
+    # ============================================================
+    
+    def compute_document_hash(self, document_bytes: bytes) -> str:
+        """SHA-256 hash of full document content."""
+        return hashlib.sha256(document_bytes).hexdigest()
+    
+    def compute_signature_hash(self, signature_bytes: bytes) -> str:
+        """SHA-256 hash of extracted signature region."""
+        return hashlib.sha256(signature_bytes).hexdigest()
+    
+    def compute_file_hash(self, file_path: str) -> str:
+        """SHA-256 hash of a file (streaming for large files)."""
+        sha256 = hashlib.sha256()
+        with open(file_path, "rb") as f:
+            for chunk in iter(lambda: f.read(8192), b""):
+                sha256.update(chunk)
+        return sha256.hexdigest()
+    
+    # ============================================================
+    # HMAC SIGNING
+    # ============================================================
+    
+    def generate_hmac(self, payload: Dict[str, Any]) -> str:
+        """HMAC-SHA256 signature over canonical JSON payload."""
+        canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        return hmac.new(
+            self.secret_key,
+            canonical.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+    
+    def verify_hmac(self, payload: Dict[str, Any], provided_hmac: str) -> bool:
+        """Constant-time HMAC verification (prevents timing attacks)."""
+        try:
+            expected = self.generate_hmac(payload)
+            return hmac.compare_digest(expected, provided_hmac)
+        except Exception:
+            return False
+    
+    # ============================================================
+    # INTEGRITY RECORD (for QR embedding)
+    # ============================================================
+    
+    def build_integrity_record(
+        self,
+        document_id: str,
+        document_hash: str,
+        signature_hash: str,
+        ai_confidence: float,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Build complete integrity record for QR embedding.
+        This record gets encoded into the QR code and printed on the document.
+        """
+        record = {
+            "v": self.version,
+            "doc_id": document_id,
+            "doc_hash": document_hash,
+            "sig_hash": signature_hash,
+            "ai_conf": round(float(ai_confidence), 4),
+            "ts": datetime.utcnow().isoformat() + "Z",
+            "issuer": "SigGuard-LK",
+            "meta": metadata or {},
+        }
+        
+        # Sign the record
+        record["hmac"] = self.generate_hmac(record)
+        
+        return record
+    
+    def verify_integrity_record(
+        self,
+        record: Dict[str, Any],
+        current_document_hash: str,
+        max_age_days: int = 3650,  # 10 years
+    ) -> Dict[str, Any]:
+        """
+        Verify a scanned QR integrity record against current document.
+        
+        Performs 3 checks:
+        1. HMAC validity (detects QR tampering)
+        2. Document hash match (detects content tampering)
+        3. Timestamp freshness
+        """
+        result = {
+            "hmac_valid": False,
+            "document_match": False,
+            "timestamp_valid": True,
+            "tamper_detected": True,
+            "details": {},
+            "errors": [],
+        }
+        
+        # Guard: check required fields
+        required_fields = ["v", "doc_id", "doc_hash", "sig_hash", "hmac"]
+        missing = [f for f in required_fields if f not in record]
+        if missing:
+            result["errors"].append(f"Missing fields: {missing}")
+            return result
+        
+        # ---- Check 1: HMAC verification ----
+        record_copy = record.copy()
+        provided_hmac = record_copy.pop("hmac", "")
+        result["hmac_valid"] = self.verify_hmac(record_copy, provided_hmac)
+        result["details"]["hmac"] = "valid" if result["hmac_valid"] else "invalid"
+        
+        # ---- Check 2: Document hash match ----
+        stored_hash = record.get("doc_hash", "")
+        result["document_match"] = hmac.compare_digest(
+            stored_hash, current_document_hash
+        )
+        result["details"]["document_hash"] = (
+            "match" if result["document_match"] else "MISMATCH"
+        )
+        if not result["document_match"]:
+            result["details"]["expected_hash"] = stored_hash[:16] + "..."
+            result["details"]["actual_hash"] = current_document_hash[:16] + "..."
+        
+        # ---- Check 3: Timestamp freshness ----
+        try:
+            ts_str = record.get("ts", "").rstrip("Z")
+            ts = datetime.fromisoformat(ts_str)
+            age_days = (datetime.utcnow() - ts).days
+            result["timestamp_valid"] = 0 <= age_days <= max_age_days
+            result["details"]["age_days"] = age_days
+            result["details"]["max_age_days"] = max_age_days
+        except Exception as e:
+            result["timestamp_valid"] = False
+            result["errors"].append(f"Timestamp parse error: {e}")
+        
+        # ---- Final tamper decision ----
+        result["tamper_detected"] = not (
+            result["hmac_valid"]
+            and result["document_match"]
+            and result["timestamp_valid"]
+        )
+        
+        return result
+    
+    # ============================================================
+    # COMPOSITE SCORE (for fusion engine)
+    # ============================================================
+    
+    def compute_crypto_score(self, verification: Dict[str, Any]) -> float:
+        """
+        Convert crypto verification result to 0-1 score for fusion.
+        
+        Weighted by component importance:
+        - HMAC valid:       0.5 (detects QR tampering)
+        - Document match:   0.4 (detects content tampering)
+        - Timestamp valid:  0.1 (informational)
+        """
+        score = 0.0
+        if verification.get("hmac_valid"):
+            score += 0.5
+        if verification.get("document_match"):
+            score += 0.4
+        if verification.get("timestamp_valid"):
+            score += 0.1
+        return round(score, 4)
