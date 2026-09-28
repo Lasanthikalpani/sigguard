@@ -86,3 +86,5 @@ debug_*.py.bak
 
 # Test results (keep only docs/)
 *.test_results.tmp
+# Backup files
+*.bak

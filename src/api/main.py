@@ -1,4 +1,4 @@
-"""SigGuard FastAPI service (RQ1, industry-level)."""
+﻿"""SigGuard FastAPI service (RQ1 + RQ3, industry-level)."""
 import io
 import time
 import os
@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from src.models.siamese import SiameseNetwork
 from src.data.preprocess import SignaturePreprocessor
 from src.api.routes import benchmark
+from src.api.routers.hybrid import router as hybrid_router   # RQ3
 
 state = {}
 
@@ -59,6 +60,10 @@ app.add_middleware(
 
 # Benchmark router
 app.include_router(benchmark.router)
+
+# RQ3: Hybrid verification router
+app.include_router(hybrid_router)
+
 
 class VerificationResponse(BaseModel):
     model_config = {"protected_namespaces": ()}

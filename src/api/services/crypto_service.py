@@ -108,15 +108,25 @@ class CryptoService:
         self,
         record: Dict[str, Any],
         current_document_hash: str,
-        max_age_days: int = 3650,  # 10 years
+        max_age_days: int = 3650,
+        skip_document_match: bool = False,
     ) -> Dict[str, Any]:
         """
         Verify a scanned QR integrity record against current document.
         
+        Args:
+            record: Integrity record decoded from QR
+            current_document_hash: SHA-256 of currently scanned document
+            max_age_days: Maximum allowed document age
+            skip_document_match: If True, skip the document hash comparison.
+                Set this to True when the QR code has been embedded INTO
+                the document, because embedding changes the document bytes
+                (and therefore the document's SHA-256 hash).
+        
         Performs 3 checks:
-        1. HMAC validity (detects QR tampering)
-        2. Document hash match (detects content tampering)
-        3. Timestamp freshness
+        1. HMAC validity (detects QR tampering) — ALWAYS checked
+        2. Document hash match (detects content tampering) — OPTIONAL
+        3. Timestamp freshness — ALWAYS checked
         """
         result = {
             "hmac_valid": False,
@@ -140,17 +150,21 @@ class CryptoService:
         result["hmac_valid"] = self.verify_hmac(record_copy, provided_hmac)
         result["details"]["hmac"] = "valid" if result["hmac_valid"] else "invalid"
         
-        # ---- Check 2: Document hash match ----
-        stored_hash = record.get("doc_hash", "")
-        result["document_match"] = hmac.compare_digest(
-            stored_hash, current_document_hash
-        )
-        result["details"]["document_hash"] = (
-            "match" if result["document_match"] else "MISMATCH"
-        )
-        if not result["document_match"]:
-            result["details"]["expected_hash"] = stored_hash[:16] + "..."
-            result["details"]["actual_hash"] = current_document_hash[:16] + "..."
+        # ---- Check 2: Document hash match (optional) ----
+        if skip_document_match:
+            result["document_match"] = True
+            result["details"]["document_hash"] = "SKIPPED (QR embedded in document)"
+        else:
+            stored_hash = record.get("doc_hash", "")
+            result["document_match"] = hmac.compare_digest(
+                stored_hash, current_document_hash
+            )
+            result["details"]["document_hash"] = (
+                "match" if result["document_match"] else "MISMATCH"
+            )
+            if not result["document_match"]:
+                result["details"]["expected_hash"] = stored_hash[:16] + "..."
+                result["details"]["actual_hash"] = current_document_hash[:16] + "..."
         
         # ---- Check 3: Timestamp freshness ----
         try:
@@ -172,7 +186,6 @@ class CryptoService:
         )
         
         return result
-    
     # ============================================================
     # COMPOSITE SCORE (for fusion engine)
     # ============================================================
