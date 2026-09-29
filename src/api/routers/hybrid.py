@@ -300,7 +300,7 @@ async def issue_document(
     doc_id = document_id or _generate_document_id()
     
     # Compute hashes
-    doc_hash = _crypto.compute_document_hash(doc_bytes)
+    doc_hash = _crypto.compute_content_hash_with_mask(doc_bytes)
     sig_hash = _crypto.compute_signature_hash(sig_bytes)
     
     # Build integrity record
@@ -374,11 +374,11 @@ async def verify_document(
         raise HTTPException(400, f"QR parse error: {qr_record['_error']}")
     
     # Step 2: Verify cryptographic integrity
-    current_hash = _crypto.compute_document_hash(doc_bytes)
+    current_hash = _crypto.compute_content_hash_with_mask(doc_bytes)
     crypto_result = _crypto.verify_integrity_record(
         qr_record.copy(),
         current_hash,
-        skip_document_match=True,
+        skip_document_match=False,
     )
     
     # Step 3: Run AI verification (RQ1)
@@ -438,11 +438,11 @@ async def verify_batch(
                 })
                 continue
             
-            current_hash = _crypto.compute_document_hash(doc_bytes)
+            current_hash = _crypto.compute_content_hash_with_mask(doc_bytes)
             crypto_result = _crypto.verify_integrity_record(
         qr_record.copy(),  # copy so we don't mutate cached record
         current_hash,
-        skip_document_match=True,
+        skip_document_match=False,
     )
             ai_result = await _run_ai_verification(sig_bytes, None)  # No reference in batch mode
             fusion = _fusion.fuse(ai_result, crypto_result)
@@ -509,7 +509,9 @@ async def issue_and_embed(
     doc_id = document_id or _generate_document_id()
 
     # Compute hashes
-    doc_hash = _crypto.compute_document_hash(doc_bytes)
+
+    # Compute hashes with QR region masked (for tamper detection)
+    doc_hash = _crypto.compute_content_hash_with_mask(doc_bytes)
     sig_hash = _crypto.compute_signature_hash(sig_bytes)
 
     # Build integrity record

@@ -38,6 +38,60 @@ class CryptoService:
     def compute_document_hash(self, document_bytes: bytes) -> str:
         """SHA-256 hash of full document content."""
         return hashlib.sha256(document_bytes).hexdigest()
+
+    def compute_content_hash_with_mask(
+        self,
+        document_bytes: bytes,
+        mask_margin: int = 50,
+        mask_value: int = 255,
+    ) -> str:
+        """
+        Compute SHA-256 hash of document content with QR region masked.
+
+        The QR region is determined using the SAME logic as
+        QRService.embed_in_document():
+        - QR size: max(400, min(w, h) * 0.35)
+        - QR position: (w - qr_size - 20, h - qr_size - 20)
+        - Mask: QR region + mask_margin pixels around it
+
+        This enables content tamper detection in RQ3 (any tampering
+        outside the QR region will change the hash).
+
+        Args:
+            document_bytes: Document image bytes (PNG/JPEG)
+            mask_margin: Extra pixels to mask around QR region
+            mask_value: Pixel value to use for masking (255 = white)
+
+        Returns:
+            SHA-256 hex digest of the masked document
+        """
+        import io
+        from PIL import Image
+        import numpy as np
+
+        # Load image
+        img = Image.open(io.BytesIO(document_bytes)).convert("RGB")
+        arr = np.array(img)
+        h, w = arr.shape[:2]
+
+        # Determine QR region (same as QRService.embed_in_document)
+        qr_size = max(400, int(min(w, h) * 0.35))
+        qr_x1 = w - qr_size - 20
+        qr_y1 = h - qr_size - 20
+
+        # Mask region: QR region + margin, clamped to image bounds
+        x1 = max(0, qr_x1 - mask_margin)
+        y1 = max(0, qr_y1 - mask_margin)
+        x2 = w
+        y2 = h
+
+        # Mask the QR region with uniform color
+        arr[y1:y2, x1:x2] = mask_value
+
+        # Hash the masked array bytes
+        masked_bytes = arr.tobytes()
+        return hashlib.sha256(masked_bytes).hexdigest()
+    
     
     def compute_signature_hash(self, signature_bytes: bytes) -> str:
         """SHA-256 hash of extracted signature region."""
