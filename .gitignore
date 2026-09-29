@@ -88,3 +88,7 @@ debug_*.py.bak
 *.test_results.tmp
 # Backup files
 *.bak
+
+# RQ3 dataset (too large for git)
+data/rq3_dataset/
+data/blockchain/
