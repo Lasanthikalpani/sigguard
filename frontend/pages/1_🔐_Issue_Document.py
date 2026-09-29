@@ -1,22 +1,24 @@
-﻿"""RQ3 Page 1 — Issue Document with QR + Auto-Embed."""
+﻿"""RQ3 Page 1 — Issue Document with Server-Side QR Embedding."""
 import base64
-import io
 
 import requests
 import streamlit as st
-from PIL import Image
 
 API_URL = "http://localhost:8000"
 HYBRID_API = f"{API_URL}/api/v1/hybrid"
 
-st.set_page_config(page_title="Issue Document — SigGuard LK", page_icon="🔐", layout="wide")
+st.set_page_config(
+    page_title="Issue Document — SigGuard LK",
+    page_icon="🔐",
+    layout="wide",
+)
 
 st.title("🔐 Issue Document with QR Integrity Record")
 st.markdown("""
 **RQ3 — Hybrid Document Verification**
 
 Issue a new document with a cryptographically-signed QR code.
-The QR will be **automatically embedded** into the document.
+The QR will be **automatically embedded** into the document (server-side).
 """)
 
 st.divider()
@@ -38,31 +40,31 @@ except Exception:
 st.divider()
 
 # ============================================================
-# WHAT TO UPLOAD
+# HELP BOX
 # ============================================================
 with st.expander("📖 What should I upload? (Click to expand)", expanded=False):
     st.markdown("""
     ### You need TWO images from the SAME document:
-    
+
     **1. 📄 Full Document (WITHOUT QR)**
     - The **complete** original document image
     - Land deed, ID card, certificate, etc.
     - **Must NOT have a QR code yet** — this page will generate & embed it
-    
+
     **2. ✍️ Signature Region (CROPPED)**
     - **ONLY the signature area** — cropped from the same document
     - Used by the AI layer to detect forgery
     """)
 
 # ============================================================
-# FORM
+# UPLOAD FIELDS
 # ============================================================
 col1, col2 = st.columns(2)
 
 with col1:
     st.subheader("📄 1. Full Document (WITHOUT QR)")
     st.caption("Upload the **complete** original document. No QR code yet.")
-    
+
     doc_file = st.file_uploader(
         "Choose document image",
         type=["png", "jpg", "jpeg"],
@@ -75,7 +77,7 @@ with col1:
 with col2:
     st.subheader("✍️ 2. Signature Region (CROPPED)")
     st.caption("Upload **ONLY** the signature portion. Used by AI.")
-    
+
     sig_file = st.file_uploader(
         "Choose signature image",
         type=["png", "jpg", "jpeg"],
@@ -110,7 +112,7 @@ if not ready:
     st.warning("⚠️ Please upload BOTH images above to enable the button.")
 
 if st.button("🚀 Issue Document with QR", type="primary", use_container_width=True, disabled=not ready):
-    with st.spinner("Issuing document and embedding QR..."):
+    with st.spinner("Issuing document and embedding QR (server-side)..."):
         files = {
             "document": (doc_file.name, doc_file.getvalue(), doc_file.type or "image/png"),
             "signature": (sig_file.name, sig_file.getvalue(), sig_file.type or "image/png"),
@@ -118,59 +120,39 @@ if st.button("🚀 Issue Document with QR", type="primary", use_container_width=
         data = {"issuer": issuer, "ai_confidence": str(ai_conf)}
         if custom_id:
             data["document_id"] = custom_id
-        
+
         try:
-            # Step 1: Issue document via API
-            r = requests.post(f"{HYBRID_API}/issue", files=files, data=data, timeout=30)
-            
+            # Use /issue-and-embed — server-side QR embedding
+            r = requests.post(f"{HYBRID_API}/issue-and-embed", files=files, data=data, timeout=60)
+
             if r.status_code != 200:
                 st.error(f"❌ Issue failed: {r.status_code} — {r.text}")
                 st.stop()
-            
+
             result = r.json()
-            
-            # Step 2: Decode QR base64
+
+            # Decode both QR and stamped document
             qr_bytes = base64.b64decode(result["qr_base64"])
-            
-            # Step 3: Embed QR into document (client-side using local QRService)
-            try:
-                # Import QRService locally
-                import sys
-                from pathlib import Path
-                sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-                from src.api.services.qr_service import QRService
-                
-                qr_service = QRService()
-                stamped_bytes = qr_service.embed_in_document(
-                    doc_file.getvalue(),
-                    qr_bytes,
-                    position="bottom-right",
-                )
-                
-                # Store everything in session state
-                st.session_state["issued_document"] = result
-                st.session_state["issued_doc_bytes"] = doc_file.getvalue()
-                st.session_state["stamped_doc_bytes"] = stamped_bytes
-                st.session_state["qr_bytes"] = qr_bytes
-                
-                st.success("✅ Document issued and QR embedded successfully!")
-            except Exception as embed_err:
-                st.warning(f"⚠️ QR issued but embed failed: {embed_err}")
-                st.session_state["issued_document"] = result
-                st.session_state["issued_doc_bytes"] = doc_file.getvalue()
-                st.session_state["qr_bytes"] = qr_bytes
-        
+            stamped_bytes = base64.b64decode(result["stamped_document_base64"])
+
+            # Store in session state
+            st.session_state["issued_document"] = result
+            st.session_state["stamped_doc_bytes"] = stamped_bytes
+            st.session_state["qr_bytes"] = qr_bytes
+
+            st.success("✅ Document issued and QR embedded successfully!")
+
         except Exception as e:
             st.error(f"❌ Request failed: {e}")
 
 # ============================================================
-# RESULT
+# DISPLAY RESULT
 # ============================================================
 if "issued_document" in st.session_state:
     result = st.session_state["issued_document"]
     st.divider()
     st.subheader("📋 Issue Result")
-    
+
     col_a, col_b, col_c = st.columns(3)
     with col_a:
         st.metric("Document ID", result["document_id"])
@@ -178,14 +160,14 @@ if "issued_document" in st.session_state:
         st.metric("Issued At", result["issued_at"][:19])
     with col_c:
         st.metric("QR Size", f"{len(result['qr_base64'])} b64")
-    
+
     # Tabs
     tab1, tab2, tab3 = st.tabs([
         "🖼️ Stamped Document (with QR)",
         "🔳 QR Code",
         "📋 Integrity Record",
     ])
-    
+
     with tab1:
         if "stamped_doc_bytes" in st.session_state:
             st.subheader("✅ Document with Embedded QR")
@@ -204,15 +186,15 @@ if "issued_document" in st.session_state:
             )
             st.info("""
             **💡 Next step:** Use this stamped document on the **🔍 Hybrid Verify** page.
-            
+
             1. Download the stamped document above
             2. Go to **🔍 Hybrid Verify** page
-            3. Upload this stamped document + the signature
+            3. Upload this stamped document + signature + reference
             4. Click Verify
             """)
         else:
-            st.warning("⚠️ QR was not embedded (client-side embed failed). Download QR separately and embed manually.")
-    
+            st.warning("⚠️ No stamped document available")
+
     with tab2:
         st.subheader("QR Code (Standalone)")
         qr_bytes = base64.b64decode(result["qr_base64"])
@@ -224,7 +206,7 @@ if "issued_document" in st.session_state:
             mime="image/png",
             use_container_width=True,
         )
-    
+
     with tab3:
         st.subheader("Integrity Record (JSON)")
         st.json(result["integrity_record"])
