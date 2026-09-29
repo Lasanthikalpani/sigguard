@@ -114,28 +114,109 @@ def _generate_document_id() -> str:
 
 
 async def _run_ai_verification(
-    document_bytes: bytes,
     signature_bytes: bytes,
+    reference_bytes: Optional[bytes] = None,
 ) -> dict:
     """
     Run RQ1 AI verification (Siamese CNN).
-    
-    In production, this calls the RQ1 model. If unavailable,
-    falls back to a placeholder that assumes high confidence
-    (for testing the hybrid pipeline).
+
+    If reference is provided, compares reference vs test signature.
+    If not, falls back to a placeholder value.
+
+    Args:
+        signature_bytes: Test signature region
+        reference_bytes: Optional reference (genuine) signature
+
+    Returns:
+        Dict with 'similarity' and 'prediction' keys
     """
-    try:
-        # Try to use RQ1 AI service if available
-        from src.api.services.ai_service import AIService
-        ai = AIService()
-        result = await ai.verify_signature(document_bytes, signature_bytes)
-        return result
-    except (ImportError, AttributeError):
-        # Fallback: use AI confidence from request or default
+    if reference_bytes is None:
+        # No reference provided → fallback
         return {
             "similarity": 0.94,
             "prediction": "genuine",
             "_fallback": True,
+            "_reason": "No reference signature provided",
+        }
+
+    try:
+        # Import RQ1 model from main.py state
+        from src.api.main import state
+        from src.data.preprocess import SignaturePreprocessor
+        import torch
+        import io
+        import tempfile
+        import os
+        from PIL import Image
+
+        if "model" not in state:
+            return {
+                "similarity": 0.94,
+                "prediction": "genuine",
+                "_fallback": True,
+                "_reason": "RQ1 model not loaded",
+            }
+
+        model = state["model"]
+        preprocessor = state["preprocessor"]
+        device = state["device"]
+
+        # Load images from bytes
+        ref_img = Image.open(io.BytesIO(reference_bytes)).convert("L")
+        test_img = Image.open(io.BytesIO(signature_bytes)).convert("L")
+
+        # Save temp files (preprocessor expects paths)
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as ref_f:
+            ref_path = ref_f.name
+            ref_img.save(ref_path)
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as test_f:
+            test_path = test_f.name
+            test_img.save(test_path)
+
+        try:
+            # Preprocess
+            ref_processed = preprocessor(ref_path)
+            test_processed = preprocessor(test_path)
+
+            # Tensors
+            ref_tensor = (
+                torch.from_numpy(ref_processed)
+                .unsqueeze(0).unsqueeze(0).repeat(1, 3, 1, 1)
+                .to(device)
+            )
+            test_tensor = (
+                torch.from_numpy(test_processed)
+                .unsqueeze(0).unsqueeze(0).repeat(1, 3, 1, 1)
+                .to(device)
+            )
+
+            # Inference
+            with torch.no_grad():
+                emb1, emb2 = model(ref_tensor, test_tensor)
+                distance = torch.nn.functional.pairwise_distance(emb1, emb2).item()
+
+            # RQ1 threshold
+            threshold = 0.1358
+            similarity = max(0.0, min(1.0, 1.0 - distance))
+            prediction = "genuine" if distance < threshold else "forged"
+
+            return {
+                "similarity": similarity,
+                "prediction": prediction,
+                "distance": distance,
+                "_fallback": False,
+            }
+        finally:
+            # Cleanup temp files
+            os.unlink(ref_path)
+            os.unlink(test_path)
+
+    except Exception as e:
+        return {
+            "similarity": 0.94,
+            "prediction": "genuine",
+            "_fallback": True,
+            "_error": str(e),
         }
 
 
@@ -249,6 +330,7 @@ async def issue_document(
 async def verify_document(
     document: UploadFile = File(..., description="Document image with embedded QR"),
     signature: UploadFile = File(..., description="Signature region image"),
+    reference: Optional[UploadFile] = File(None, description="Reference signature (for AI comparison)"),
 ):
     """
     Full hybrid verification:
@@ -300,8 +382,10 @@ async def verify_document(
     )
     
     # Step 3: Run AI verification (RQ1)
-    ai_result = await _run_ai_verification(doc_bytes, sig_bytes)
-    
+    # Step 3: Run AI verification (RQ1) with reference if provided
+    ref_bytes = await reference.read() if reference else None
+    ai_result = await _run_ai_verification(sig_bytes, ref_bytes)
+        
     # Step 4: Fuse decisions
     fusion_result = _fusion.fuse(ai_result, crypto_result)
     
@@ -360,7 +444,7 @@ async def verify_batch(
         current_hash,
         skip_document_match=True,
     )
-            ai_result = await _run_ai_verification(doc_bytes, sig_bytes)
+            ai_result = await _run_ai_verification(sig_bytes, None)  # No reference in batch mode
             fusion = _fusion.fuse(ai_result, crypto_result)
             
             results.append({
@@ -384,4 +468,80 @@ async def verify_batch(
         "tampered": sum(1 for r in results if r.get("tamper_detected")),
         "results": results,
         "processed_at": datetime.utcnow().isoformat() + "Z",
+    }
+
+
+# ============================================================
+# RQ3: Issue + Embed (Server-Side QR Embedding)
+# ============================================================
+
+@router.post("/issue-and-embed")
+async def issue_and_embed(
+    document: UploadFile = File(..., description="Document image (PNG/JPEG)"),
+    signature: UploadFile = File(..., description="Signature region image"),
+    document_id: Optional[str] = Form(None),
+    issuer: str = Form("Government of Sri Lanka"),
+    ai_confidence: float = Form(0.95),
+):
+    """
+    Issue a document AND return the stamped image with QR embedded.
+
+    Combines /issue + QR embedding in a single API call, so the client
+    (Streamlit) does not need to import QRService locally.
+
+    Returns:
+        document_id: Generated or custom ID
+        qr_base64: QR code as base64 PNG (standalone)
+        stamped_document_base64: Document with QR embedded (base64 PNG)
+        integrity_record: Full integrity record dict
+        issued_at: ISO timestamp
+    """
+    try:
+        doc_bytes = await document.read()
+        sig_bytes = await signature.read()
+    except Exception as e:
+        raise HTTPException(400, f"Failed to read uploads: {e}")
+
+    if not doc_bytes or not sig_bytes:
+        raise HTTPException(400, "Empty document or signature")
+
+    # Generate document ID
+    doc_id = document_id or _generate_document_id()
+
+    # Compute hashes
+    doc_hash = _crypto.compute_document_hash(doc_bytes)
+    sig_hash = _crypto.compute_signature_hash(sig_bytes)
+
+    # Build integrity record
+    record = _crypto.build_integrity_record(
+        document_id=doc_id,
+        document_hash=doc_hash,
+        signature_hash=sig_hash,
+        ai_confidence=ai_confidence,
+        metadata={"issuer": issuer},
+    )
+
+    # Encode QR
+    try:
+        qr_bytes = _qr.encode_record(record)
+    except Exception as e:
+        raise HTTPException(500, f"QR encoding failed: {e}")
+
+    # Embed QR into document (SERVER-SIDE)
+    try:
+        stamped_bytes = _qr.embed_in_document(
+            doc_bytes,
+            qr_bytes,
+            position="bottom-right",
+        )
+    except Exception as e:
+        raise HTTPException(500, f"QR embedding failed: {e}")
+
+    # Return both QR and stamped document as base64
+    return {
+        "document_id": doc_id,
+        "qr_base64": base64.b64encode(qr_bytes).decode("ascii"),
+        "stamped_document_base64": base64.b64encode(stamped_bytes).decode("ascii"),
+        "integrity_record": record,
+        "issued_at": datetime.utcnow().isoformat() + "Z",
     }
