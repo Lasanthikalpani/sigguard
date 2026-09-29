@@ -24,6 +24,7 @@ from src.api.services.crypto_service import CryptoService
 from src.api.services.qr_service import QRService
 from src.api.services.fusion_engine import FusionEngine
 
+from src.api.services.blockchain_service import get_ledger   # ← 🆕 Blockchain
 
 # ============================================================
 # ROUTER SETUP
@@ -318,6 +319,18 @@ async def issue_document(
     except Exception as e:
         raise HTTPException(500, f"QR encoding failed: {e}")
     
+        # Add to blockchain ledger
+    try:
+        ledger = get_ledger()
+        ledger.add_document(
+            doc_id=doc_id,
+            content_hash=doc_hash,
+            sig_hash=sig_hash,
+            issuer=issuer,
+        )
+    except Exception as e:
+        print(f"[WARN] Blockchain add failed: {e}")
+
     return IssueResponse(
         document_id=doc_id,
         qr_base64=base64.b64encode(qr_bytes).decode("ascii"),
@@ -539,11 +552,184 @@ async def issue_and_embed(
     except Exception as e:
         raise HTTPException(500, f"QR embedding failed: {e}")
 
+       # ============================================================
+    # NEW: Add to blockchain ledger
+    # ============================================================
+    try:
+        ledger = get_ledger()
+        block = ledger.add_document(
+            doc_id=doc_id,
+            content_hash=doc_hash,
+            sig_hash=sig_hash,
+            issuer=issuer,
+            issued_at=datetime.utcnow().isoformat() + "Z",
+            metadata={
+                "issuer_display": issuer,
+                "ai_confidence": ai_confidence,
+            },
+        )
+        block_hash = block["block_hash"]
+        block_index = block["index"]
+    except Exception as e:
+        # Log but don't fail — blockchain is optional
+        block_hash = None
+        block_index = None
+        print(f"[WARN] Blockchain add failed: {e}")
+
     # Return both QR and stamped document as base64
     return {
         "document_id": doc_id,
         "qr_base64": base64.b64encode(qr_bytes).decode("ascii"),
         "stamped_document_base64": base64.b64encode(stamped_bytes).decode("ascii"),
         "integrity_record": record,
+        "blockchain": {
+            "block_hash": block_hash,
+            "block_index": block_index,
+        },
         "issued_at": datetime.utcnow().isoformat() + "Z",
     }
+
+
+# ============================================================
+# RQ3: Blockchain Ledger Endpoints
+# ============================================================
+
+class LedgerLookupRequest(BaseModel):
+    """Request body for ledger lookup."""
+    doc_id: str = Field(..., description="Document ID to look up")
+
+
+class CertifiedCopyRequest(BaseModel):
+    """Request body for certified copy issuance."""
+    original_doc_id: str = Field(..., description="Original document ID")
+    certifier: str = Field("GovLK", description="Certifying authority")
+
+
+@router.get("/ledger/stats")
+async def ledger_stats():
+    """
+    Get blockchain ledger statistics.
+
+    Returns:
+        total_blocks: Number of blocks in the chain
+        genesis_hash: First block hash
+        latest_hash: Most recent block hash
+        latest_index: Index of latest block
+    """
+    try:
+        ledger = get_ledger()
+        return {
+            "status": "ok",
+            "stats": ledger.get_stats(),
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+        }
+    except Exception as e:
+        raise HTTPException(500, f"Ledger error: {e}")
+
+
+@router.get("/ledger/verify-chain")
+async def verify_chain():
+    """
+    Verify the integrity of the entire blockchain ledger.
+
+    Returns:
+        valid: True if chain is intact
+        length: Number of blocks
+        errors: List of any tampering errors
+    """
+    try:
+        ledger = get_ledger()
+        result = ledger.verify_chain()
+        return {
+            "status": "ok",
+            **result,
+            "verified_at": datetime.utcnow().isoformat() + "Z",
+        }
+    except Exception as e:
+        raise HTTPException(500, f"Chain verification failed: {e}")
+
+
+@router.post("/ledger/lookup")
+async def ledger_lookup(req: LedgerLookupRequest):
+    """
+    Look up a document in the blockchain ledger by doc_id.
+
+    Returns the full block if found, or 404 if not.
+    """
+    try:
+        ledger = get_ledger()
+        block = ledger.get_document(req.doc_id)
+        if block is None:
+            raise HTTPException(404, f"Document not found: {req.doc_id}")
+        return {
+            "status": "ok",
+            "block": block,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"Lookup failed: {e}")
+
+
+@router.get("/ledger/find-by-hash")
+async def find_by_hash(content_hash: str):
+    """
+    Find all blocks matching a content hash (original + certified copies).
+
+    Query parameter: content_hash
+    """
+    try:
+        ledger = get_ledger()
+        blocks = ledger.find_by_content_hash(content_hash)
+        return {
+            "status": "ok",
+            "content_hash": content_hash,
+            "matches": len(blocks),
+            "blocks": blocks,
+        }
+    except Exception as e:
+        raise HTTPException(500, f"Search failed: {e}")
+
+
+@router.post("/ledger/certified-copy")
+async def issue_certified_copy(req: CertifiedCopyRequest):
+    """
+    Issue a certified copy of an existing document.
+
+    The certified copy has the SAME content_hash as the original
+    but a DIFFERENT issued_at timestamp. This is the supervisor's
+    key insight: certified copies are NOT forgeries.
+    """
+    try:
+        ledger = get_ledger()
+        block = ledger.add_certified_copy(
+            original_doc_id=req.original_doc_id,
+            certifier=req.certifier,
+        )
+        return {
+            "status": "ok",
+            "certified_copy": block,
+            "message": f"Certified copy issued for {req.original_doc_id}",
+        }
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+    except Exception as e:
+        raise HTTPException(500, f"Certified copy issuance failed: {e}")
+
+
+@router.get("/ledger/export")
+async def export_ledger():
+    """
+    Export the entire blockchain ledger as JSON.
+
+    Useful for backup or for verifying on another node.
+    """
+    try:
+        ledger = get_ledger()
+        return {
+            "status": "ok",
+            "exported_at": datetime.utcnow().isoformat() + "Z",
+            "chain": ledger.chain,
+        }
+    except Exception as e:
+        raise HTTPException(500, f"Export failed: {e}")

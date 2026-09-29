@@ -137,25 +137,44 @@ class CryptoService:
         signature_hash: str,
         ai_confidence: float,
         metadata: Optional[Dict[str, Any]] = None,
+        include_timestamp: bool = False,
     ) -> Dict[str, Any]:
         """
-        Build complete integrity record for QR embedding.
-        This record gets encoded into the QR code and printed on the document.
+        Build integrity record for QR embedding.
+
+        IMPORTANT (Supervisor's comment):
+        Timestamp is REMOVED by default because certified copies
+        issued later would have different timestamps but SAME content.
+        Including timestamp would falsely flag certified copies as tampered.
+
+        Args:
+            document_id: Unique document identifier
+            document_hash: SHA-256 of content (QR region masked)
+            signature_hash: SHA-256 of signature region
+            ai_confidence: RQ1 AI confidence (informational)
+            metadata: Additional metadata (issuer, etc.)
+            include_timestamp: If True, includes 'ts' field. Default False.
+
+        Returns:
+            Integrity record dict (ready for QR encoding)
         """
         record = {
-            "v": self.version,
+            "v": "2.0",                       # v2.0 — timestamp optional
             "doc_id": document_id,
             "doc_hash": document_hash,
             "sig_hash": signature_hash,
             "ai_conf": round(float(ai_confidence), 4),
-            "ts": datetime.utcnow().isoformat() + "Z",
             "issuer": "SigGuard-LK",
             "meta": metadata or {},
         }
-        
+
+        # Timestamp only if explicitly requested
+        if include_timestamp:
+            record["ts"] = datetime.utcnow().isoformat() + "Z"
+
         # Sign the record
         record["hmac"] = self.generate_hmac(record)
-        
+
         return record
     
     def verify_integrity_record(
@@ -221,16 +240,25 @@ class CryptoService:
                 result["details"]["actual_hash"] = current_document_hash[:16] + "..."
         
         # ---- Check 3: Timestamp freshness ----
-        try:
-            ts_str = record.get("ts", "").rstrip("Z")
-            ts = datetime.fromisoformat(ts_str)
-            age_days = (datetime.utcnow() - ts).days
-            result["timestamp_valid"] = 0 <= age_days <= max_age_days
-            result["details"]["age_days"] = age_days
-            result["details"]["max_age_days"] = max_age_days
-        except Exception as e:
-            result["timestamp_valid"] = False
-            result["errors"].append(f"Timestamp parse error: {e}")
+                # ---- Check 3: Timestamp freshness (OPTIONAL for v2.0) ----
+        # Timestamp may be absent (for certified copies) — treat as valid.
+        # This is critical: certified copies have DIFFERENT timestamps
+        # but SAME content, so timestamp is NOT a tamper signal.
+        if "ts" not in record:
+            result["timestamp_valid"] = True
+            result["details"]["timestamp"] = "ABSENT (certified copy or v2.0)"
+        else:
+            try:
+                ts_str = record.get("ts", "").rstrip("Z")
+                ts = datetime.fromisoformat(ts_str)
+                age_days = (datetime.utcnow() - ts).days
+                result["timestamp_valid"] = 0 <= age_days <= max_age_days
+                result["details"]["age_days"] = age_days
+                result["details"]["max_age_days"] = max_age_days
+            except Exception as e:
+                # Invalid/absent timestamp is NOT a tamper signal
+                result["timestamp_valid"] = True
+                result["details"]["timestamp"] = f"parse skipped: {e}"
         
         # ---- Final tamper decision ----
         result["tamper_detected"] = not (

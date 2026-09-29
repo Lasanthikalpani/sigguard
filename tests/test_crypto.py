@@ -48,7 +48,7 @@ def test_hmac_detects_tampering(crypto):
 
 
 def test_build_integrity_record(crypto):
-    """Complete record building should work."""
+    """Complete record building should work (v2.0 — no timestamp by default)."""
     record = crypto.build_integrity_record(
         document_id="LK-1234567890",
         document_hash="a" * 64,
@@ -56,13 +56,51 @@ def test_build_integrity_record(crypto):
         ai_confidence=0.92,
         metadata={"issuer": "GovLK"},
     )
-    
-    assert record["v"] == "1.0"
+
+    assert record["v"] == "2.0"                          # ← v2.0
     assert record["doc_id"] == "LK-1234567890"
     assert record["ai_conf"] == 0.92
     assert "hmac" in record
-    assert "ts" in record
+    assert "ts" not in record                            # ← NO timestamp by default
 
+
+def test_build_integrity_record_with_timestamp(crypto):
+    """Record with include_timestamp=True should include 'ts' (v2.0)."""
+    record = crypto.build_integrity_record(
+        document_id="LK-TS-001",
+        document_hash="a" * 64,
+        signature_hash="b" * 64,
+        ai_confidence=0.95,
+        include_timestamp=True,
+    )
+
+    assert record["v"] == "2.0"
+    assert "ts" in record                                # ← timestamp present
+
+
+def test_certified_copy_compatible(crypto):
+    """
+    Timestamp-free records should verify successfully (for certified copies).
+
+    Supervisor's comment: Certified copies change timestamp but NOT content.
+    A record without 'ts' should pass verification.
+    """
+    doc_hash = crypto.compute_document_hash(b"certified copy content")
+    record = crypto.build_integrity_record(
+        document_id="LK-CERT-001",
+        document_hash=doc_hash,
+        signature_hash="c" * 64,
+        ai_confidence=0.95,
+        # No include_timestamp → no 'ts' field
+    )
+
+    # Verify the record
+    result = crypto.verify_integrity_record(record, doc_hash)
+
+    assert result["hmac_valid"] is True
+    assert result["document_match"] is True
+    assert result["timestamp_valid"] is True             # ← ABSENT ts = valid
+    assert result["tamper_detected"] is False
 
 def test_verify_integrity_record_valid(crypto):
     """Valid record should verify successfully."""
