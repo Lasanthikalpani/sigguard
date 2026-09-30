@@ -25,6 +25,7 @@ from src.api.services.qr_service import QRService
 from src.api.services.fusion_engine import FusionEngine
 
 from src.api.services.blockchain_service import get_ledger   # ← 🆕 Blockchain
+from src.api.services.qr_service import QRVerificationLayer, QRService
 
 # ============================================================
 # ROUTER SETUP
@@ -733,3 +734,46 @@ async def export_ledger():
         }
     except Exception as e:
         raise HTTPException(500, f"Export failed: {e}")
+
+    
+
+# ============================================================
+# LAYER 3: QR Code Verification (SigVerify Theory)
+# ============================================================
+
+@router.post("/verify-layer3")
+async def verify_layer3(
+    document: UploadFile = File(..., description="Document with QR code"),
+):
+    """
+    LAYER 3: QR Code Verification (6-step process)
+
+    Implements SigVerify theory:
+    1. SCAN QR Code
+    2. Verify CONTENT HASH
+    3. Verify METADATA HASH
+    4. Verify SIGNATURE
+    5. Check BLOCKCHAIN
+    6. FINAL DECISION
+
+    Returns 4 scenarios:
+    - FULLY_AUTHENTIC
+    - TAMPERED
+    - METADATA_MODIFIED
+    - AUTHENTIC_NOT_IN_BLOCKCHAIN
+    """
+    try:
+        doc_bytes = await document.read()
+    except Exception as e:
+        raise HTTPException(400, f"Failed to read document: {e}")
+
+    if not doc_bytes:
+        raise HTTPException(400, "Empty document")
+
+    try:
+        layer3 = QRVerificationLayer()
+        ledger = get_ledger()
+        result = layer3.verify_document(doc_bytes, blockchain_ledger=ledger)
+        return result
+    except Exception as e:
+        raise HTTPException(500, f"Layer 3 verification failed: {e}")

@@ -102,5 +102,47 @@
     "prev_hash": "72247ca0a9d6864f0d49f09f594681e773f0467f1f231ea6ad95c699d8dd6ee2",
     "metadata": {},
     "block_hash": "b9131cfe757b5b3836fca629b2df5efc819f7c136da81e73a73f10e96cda6ac6"
+  },
+  {
+    "index": 9,
+    "doc_id": "LK-20260929-9D2711E8",
+    "content_hash": "17b75166d241010699d8e7e1c1be0b3b0048c72215a3ea9f641454a18b11b81a",
+    "sig_hash": "11f8e51dc15f4225ee3cb45da8caabd655ddaea4659c1351d581fc447ff2a027",
+    "issuer": "Government of Sri Lanka",
+    "issued_at": "2026-09-29T13:52:06.141982Z",
+    "prev_hash": "b9131cfe757b5b3836fca629b2df5efc819f7c136da81e73a73f10e96cda6ac6",
+    "metadata": {
+      "issuer_display": "Government of Sri Lanka",
+      "ai_confidence": 0.95
+    },
+    "block_hash": "ed2b0d1695559994352b09e72ea81b3dc8824e15fc3bc86171c52fd6d634cd90"
+  },
+  {
+    "index": 10,
+    "doc_id": "LK-20260929-9D2711E8-COPY-10",
+    "content_hash": "17b75166d241010699d8e7e1c1be0b3b0048c72215a3ea9f641454a18b11b81a",
+    "sig_hash": "11f8e51dc15f4225ee3cb45da8caabd655ddaea4659c1351d581fc447ff2a027",
+    "issuer": "Government of Sri Lanka",
+    "issued_at": "2026-09-29T13:52:11.392626Z",
+    "prev_hash": "ed2b0d1695559994352b09e72ea81b3dc8824e15fc3bc86171c52fd6d634cd90",
+    "metadata": {
+      "is_certified_copy": true,
+      "original_doc_id": "LK-20260929-9D2711E8"
+    },
+    "block_hash": "8032cf7c04187a4a7b456c4846b3f3da313216cfb391838e57541c085b8b63b4"
+  },
+  {
+    "index": 11,
+    "doc_id": "LK-20260929-9D2711E8-COPY-11",
+    "content_hash": "17b75166d241010699d8e7e1c1be0b3b0048c72215a3ea9f641454a18b11b81a",
+    "sig_hash": "11f8e51dc15f4225ee3cb45da8caabd655ddaea4659c1351d581fc447ff2a027",
+    "issuer": "Government of Sri Lanka",
+    "issued_at": "2026-09-29T13:57:40.855540Z",
+    "prev_hash": "8032cf7c04187a4a7b456c4846b3f3da313216cfb391838e57541c085b8b63b4",
+    "metadata": {
+      "is_certified_copy": true,
+      "original_doc_id": "LK-20260929-9D2711E8"
+    },
+    "block_hash": "55d0c42bb42cb187354b12ecfd84e5fd2c77f5ddcc163eab534566927046cd92"
   }
 ]

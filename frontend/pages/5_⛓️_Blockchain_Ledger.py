@@ -20,7 +20,14 @@ st.set_page_config(
     layout="wide",
 )
 
-st.title("⛓️ Blockchain Document Ledger")
+st.title("⛓️ Secure Document Ledger")
+st.info("""
+ℹ️ **For IT Staff and Auditors**
+
+This page shows the secure ledger that stores all document records.
+Government officers should use **👤 Officer View** for document verification.
+""")
+
 st.markdown("""
 **RQ3 — Supervisor's Novelty: Document-Wise Blockchain Ledger**
 

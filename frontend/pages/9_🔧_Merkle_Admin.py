@@ -1,4 +1,11 @@
-"""RQ3 Page 6 — Merkle Tree & Block Mining (SigVerify Theory)."""
+"""
+RQ3 Page 9 — Merkle Tree Admin Tools (IT Staff Only)
+
+⚠️ WARNING: This page uses TECHNICAL terminology (Merkle Tree, Hash, Nonce).
+⚠️ Government officers should use "👤 Officer View" instead.
+
+This tool is for IT staff, auditors, and system administrators.
+"""
 import sys
 import time
 from pathlib import Path
@@ -16,7 +23,12 @@ st.set_page_config(
     layout="wide",
 )
 
-st.title("🌳 Merkle Tree & Block Mining")
+st.title("🔧 Merkle Tree Admin Tools")
+st.warning("""
+⚠️ **FOR IT STAFF ONLY**
+    
+This page uses technical terminology. Government officers should use **👤 Officer View** for document verification.
+""")
 st.markdown("""
 **SigVerify Theory: 2000 documents per block, 99.95% storage reduction**
 """)
