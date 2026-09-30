@@ -92,3 +92,8 @@ debug_*.py.bak
 # RQ3 dataset (too large for git)
 data/rq3_dataset/
 data/blockchain/
+
+# RSA Private Keys (NEVER commit!)
+data/rsa_keys/*.pem
+!data/rsa_keys/.gitkeep
+
