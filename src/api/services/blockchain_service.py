@@ -6,6 +6,7 @@ Implements a document-wise blockchain ledger for RQ3.
 Purpose (Supervisor's comment):
 - Store document records in an immutable ledger
 - Support certified copies (timestamp changes, content stays same)
+- Support amendments (Layer 5: content changes, lineage preserved)
 - Scale to millions of documents (e.g., 1980 birth certificates)
 
 Design:
@@ -116,6 +117,77 @@ class BlockchainLedger:
         self.chain.append(new_block)
         self._save()
         return new_block
+
+    # ============================================================
+    # LAYER 5: DOCUMENT AMENDMENT
+    # ============================================================
+
+    def add_amendment(
+        self,
+        original_doc_id: str,
+        new_content_hash: str,
+        new_sig_hash: str,
+        amendment_reason: str,
+        new_doc_id: Optional[str] = None,
+        issuer: str = "GovLK",
+        evidence: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Layer 5: Record a legitimate document amendment."""
+        original = self.get_document(original_doc_id)
+        if original is None:
+            raise ValueError(f"Original document not found: {original_doc_id}")
+
+        if new_doc_id is None:
+            existing = self.get_amendments(original_doc_id)
+            new_doc_id = f"{original_doc_id}-AMD-{len(existing) + 1:03d}"
+
+        prev_block = self.chain[-1]
+        new_block = {
+            "index": len(self.chain),
+            "doc_id": new_doc_id,
+            "content_hash": new_content_hash,
+            "sig_hash": new_sig_hash,
+            "issuer": issuer,
+            "issued_at": datetime.utcnow().isoformat() + "Z",
+            "prev_hash": prev_block["block_hash"],
+            "metadata": {
+                "is_amendment": True,
+                "original_doc_id": original_doc_id,
+                "amendment_reason": amendment_reason,
+                "evidence": evidence or {},
+            },
+        }
+        new_block["block_hash"] = self._compute_block_hash(new_block)
+        self.chain.append(new_block)
+        self._save()
+        return new_block
+
+    def get_amendments(self, original_doc_id: str) -> List[Dict[str, Any]]:
+        """Return all amendment blocks for a given original document."""
+        return [
+            b for b in self.chain
+            if b.get("metadata", {}).get("original_doc_id") == original_doc_id
+            and b.get("metadata", {}).get("is_amendment", False)
+        ]
+
+    def get_amendment_chain(self, doc_id: str) -> List[Dict[str, Any]]:
+        """Return the full lineage of a document."""
+        block = self.get_document(doc_id)
+        if block is None:
+            return []
+
+        current = block
+        while current.get("metadata", {}).get("is_amendment", False):
+            original_id = current["metadata"].get("original_doc_id")
+            parent = self.get_document(original_id)
+            if parent is None:
+                break
+            current = parent
+
+        original = current
+        chain = [original]
+        chain.extend(self.get_amendments(original["doc_id"]))
+        return chain
 
     # ============================================================
     # QUERY

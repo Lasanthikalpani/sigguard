@@ -14,6 +14,7 @@ from src.models.siamese import SiameseNetwork
 from src.data.preprocess import SignaturePreprocessor
 from src.api.routes import benchmark
 from src.api.routers.hybrid import router as hybrid_router   # RQ3
+from src.api.routers.amendment import router as amendment_router   # RQ3 Layer 5
 
 state = {}
 
@@ -63,6 +64,8 @@ app.include_router(benchmark.router)
 
 # RQ3: Hybrid verification router
 app.include_router(hybrid_router)
+app.include_router(amendment_router)             # ← ✅ AFTER app is defined
+
 
 
 class VerificationResponse(BaseModel):

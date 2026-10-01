@@ -1,0 +1,30 @@
+{
+  "metrics": {
+    "legit_total": 50,
+    "fake_total": 50,
+    "legit_accepted": 50,
+    "fake_rejected": 50,
+    "LAAR": 1.0,
+    "FARR": 1.0
+  },
+  "confusion_matrix": {
+    "tn": 50,
+    "fp": 0,
+    "fn": 0,
+    "tp": 50
+  },
+  "per_category": {
+    "legit_amendments": {
+      "total": 50,
+      "status_histogram": {
+        "AMENDED_AUTHENTIC": 50
+      }
+    },
+    "fake_amendments": {
+      "total": 50,
+      "status_histogram": {
+        "TAMPERED": 50
+      }
+    }
+  }
+}
