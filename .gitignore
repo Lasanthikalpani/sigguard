@@ -97,3 +97,12 @@ data/blockchain/
 data/rsa_keys/*.pem
 !data/rsa_keys/.gitkeep
 
+# RQ3 evaluation data (large PNG sets)
+data/rq3_eval/
+data/rq3_dataset/
+
+# Models & checkpoints
+models/checkpoints/
+
+# Temporary files
+temp_*.png
