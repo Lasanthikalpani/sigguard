@@ -1,26 +1,16 @@
 """
-RQ3: RSA Signature Service (Layer 2 — Crypto)
+RQ3 Layer 4 — RSA Digital Signature Service
 
-Following the SigVerify theory:
-- Private Key: stored at issuing office (signs documents)
-- Public Key: distributed freely (verifies signatures)
-
-Without RSA:
-- Anyone can create fake documents (SHA-256 is public)
-- Issuer identity not cryptographically proven
-- Non-repudiation fails
-- Not legally admissible
-
-With RSA:
-- Only issuer can sign (private key required)
-- Issuer identity proven (public key verification)
-- Non-repudiation enforced
-- Legally admissible as digital evidence
+Theory (Layer 4):
+- Digital Signature = Document's digital royal seal
+- Created with PRIVATE KEY (issuer only)
+- Verified with PUBLIC KEY (shared with everyone)
+- 100% tamper detection via Avalanche Effect
 """
 import hashlib
 import json
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Dict, Any, Optional
 
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
@@ -29,18 +19,22 @@ from cryptography.exceptions import InvalidSignature
 
 class RSAService:
     """
-    RSA signature service for SigVerify.
+    RSA Digital Signature Service for LAYER 4.
 
-    Uses RSA-2048 with PSS padding (modern standard).
+    Combines content_hash + metadata_hash, signs with private key,
+    verifies with public key.
     """
+
+    VERSION = "1.0"
 
     def __init__(
         self,
-        private_key_path: str = "data/rsa_keys/gov_private_key.pem",
-        public_key_path: str = "data/rsa_keys/gov_public_key.pem",
+        private_key_path: str = "keys/private.pem",
+        public_key_path: str = "keys/public.pem",
     ):
         self.private_key_path = Path(private_key_path)
         self.public_key_path = Path(public_key_path)
+
         self._private_key = None
         self._public_key = None
 
@@ -49,26 +43,23 @@ class RSAService:
     # ============================================================
 
     def _load_private_key(self):
-        """Load private key from disk (lazy)."""
         if self._private_key is None:
             if not self.private_key_path.exists():
                 raise FileNotFoundError(
-                    f"Private key not found: {self.private_key_path}\n"
+                    f"Private key not found: {self.private_key_path}. "
                     f"Run: python scripts/generate_rsa_keys.py"
                 )
             with open(self.private_key_path, "rb") as f:
                 self._private_key = serialization.load_pem_private_key(
-                    f.read(),
-                    password=None,
+                    f.read(), password=None
                 )
         return self._private_key
 
     def _load_public_key(self):
-        """Load public key from disk (lazy)."""
         if self._public_key is None:
             if not self.public_key_path.exists():
                 raise FileNotFoundError(
-                    f"Public key not found: {self.public_key_path}\n"
+                    f"Public key not found: {self.public_key_path}. "
                     f"Run: python scripts/generate_rsa_keys.py"
                 )
             with open(self.public_key_path, "rb") as f:
@@ -76,117 +67,157 @@ class RSAService:
         return self._public_key
 
     # ============================================================
-    # SIGN (Issuer only — private key)
+    # COMBINED HASH (Theory: Layer 4, Step 2)
     # ============================================================
 
-    def sign_record(self, record: Dict[str, Any]) -> str:
+    @staticmethod
+    def compute_combined_hash(
+        content_hash: str,
+        metadata_hash: str,
+    ) -> str:
         """
-        Sign an integrity record with the issuer's private key.
+        Theory:
+            combined_hash = SHA256(content_hash + metadata_hash)
+        """
+        combined = f"{content_hash}{metadata_hash}"
+        return hashlib.sha256(combined.encode("utf-8")).hexdigest()
 
-        Theory (SigVerify):
-            Only the issuing office has the private key.
-            Thief cannot sign documents.
+    # ============================================================
+    # SIGN (Theory: Layer 4, Step 2 - Step 5)
+    # ============================================================
 
-        Args:
-            record: Integrity record (dict without 'signature' field)
+    def sign_document(
+        self,
+        content_hash: str,
+        metadata_hash: str,
+    ) -> Dict[str, Any]:
+        """
+        Sign document with private key (RSA-2048 + SHA-256).
+
+        Theory:
+            signature = RSA_SIGN(combined_hash, private_key)
 
         Returns:
-            Base64-encoded RSA signature
+            {
+                "signature": "hex string",
+                "combined_hash": "hex string",
+                "algorithm": "RSA-2048-PKCS1-SHA256",
+                "version": "1.0"
+            }
         """
-        import base64
-
-        # Canonical JSON (deterministic)
-        canonical = json.dumps(record, sort_keys=True, separators=(",", ":"))
-
         private_key = self._load_private_key()
 
-        # Sign with RSA-PSS + SHA-256
+        # Step 1: Combine hashes
+        combined_hash = self.compute_combined_hash(content_hash, metadata_hash)
+
+        # Step 2: Sign with private key
         signature = private_key.sign(
-            canonical.encode("utf-8"),
-            padding.PSS(
-                mgf=padding.MGF1(hashes.SHA256()),
-                salt_length=padding.PSS.MAX_LENGTH,
-            ),
+            combined_hash.encode("utf-8"),
+            padding.PKCS1v15(),
             hashes.SHA256(),
         )
 
-        return base64.b64encode(signature).decode("ascii")
+        return {
+            "signature": signature.hex(),
+            "combined_hash": combined_hash,
+            "algorithm": "RSA-2048-PKCS1-SHA256",
+            "version": self.VERSION,
+        }
 
     # ============================================================
-    # VERIFY (Anyone — public key)
+    # VERIFY (Theory: Layer 4, Step 4)
     # ============================================================
 
-    def verify_record(
+    def verify_document(
         self,
-        record: Dict[str, Any],
-        signature_b64: str,
-    ) -> bool:
+        content_hash: str,
+        metadata_hash: str,
+        signature_hex: str,
+    ) -> Dict[str, Any]:
         """
-        Verify an RSA signature with the issuer's public key.
+        Verify signature with public key.
 
-        Theory (SigVerify):
-            Public key distributed freely.
-            Anyone can verify, but only issuer can sign.
-
-        Args:
-            record: Integrity record (without 'signature' field)
-            signature_b64: Base64-encoded RSA signature
+        Theory:
+            RSA_VERIFY(signature, combined_hash, public_key)
+            -> Valid / Invalid
 
         Returns:
-            True if signature is valid
+            {
+                "valid": bool,
+                "combined_hash": "hex",
+                "reason": "string"
+            }
         """
-        import base64
+        result = {
+            "valid": False,
+            "combined_hash": None,
+            "reason": None,
+        }
 
         try:
-            canonical = json.dumps(record, sort_keys=True, separators=(",", ":"))
-            signature = base64.b64decode(signature_b64)
             public_key = self._load_public_key()
+        except FileNotFoundError as e:
+            result["reason"] = f"Public key not found: {e}"
+            return result
 
+        # Recalculate combined hash
+        combined_hash = self.compute_combined_hash(content_hash, metadata_hash)
+        result["combined_hash"] = combined_hash
+
+        # Decode signature
+        try:
+            signature = bytes.fromhex(signature_hex)
+        except Exception as e:
+            result["reason"] = f"Invalid signature format: {e}"
+            return result
+
+        # Verify
+        try:
             public_key.verify(
                 signature,
-                canonical.encode("utf-8"),
-                padding.PSS(
-                    mgf=padding.MGF1(hashes.SHA256()),
-                    salt_length=padding.PSS.MAX_LENGTH,
-                ),
+                combined_hash.encode("utf-8"),
+                padding.PKCS1v15(),
                 hashes.SHA256(),
             )
-            return True
+            result["valid"] = True
+            result["reason"] = "Signature valid"
         except InvalidSignature:
-            return False
-        except Exception:
-            return False
+            result["valid"] = False
+            result["reason"] = "Signature INVALID — document tampered or wrong key"
+        except Exception as e:
+            result["valid"] = False
+            result["reason"] = f"Verification error: {e}"
+
+        return result
 
     # ============================================================
-    # KEY INFO (for debugging/audit)
+    # STATS
     # ============================================================
 
-    def get_public_key_fingerprint(self) -> str:
-        """SHA-256 fingerprint of the public key."""
-        public_key = self._load_public_key()
-        pem = public_key.public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo,
-        )
-        return hashlib.sha256(pem).hexdigest()
-
-    def get_public_key_pem(self) -> str:
-        """Return PEM-formatted public key (for distribution)."""
-        public_key = self._load_public_key()
-        pem = public_key.public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo,
-        )
-        return pem.decode("utf-8")
+    def get_key_info(self) -> Dict[str, Any]:
+        """Return info about loaded keys."""
+        info = {
+            "private_key_path": str(self.private_key_path),
+            "public_key_path": str(self.public_key_path),
+            "private_key_exists": self.private_key_path.exists(),
+            "public_key_exists": self.public_key_path.exists(),
+        }
+        if info["public_key_exists"]:
+            try:
+                pk = self._load_public_key()
+                info["key_size"] = pk.key_size
+                info["public_key_numbers"] = str(pk.public_numbers().n)[:16] + "..."
+            except Exception as e:
+                info["error"] = str(e)
+        return info
 
 
 # Singleton
-_rsa_service = None
+_rsa = None
 
 
-def get_rsa_service() -> RSAService:
-    """Get the singleton RSA service."""
-    global _rsa_service
-    if _rsa_service is None:
-        _rsa_service = RSAService()
-    return _rsa_service
+def get_rsa() -> RSAService:
+    global _rsa
+    if _rsa is None:
+        _rsa = RSAService()
+    return _rsa

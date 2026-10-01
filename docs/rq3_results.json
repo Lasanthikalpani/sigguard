@@ -1,0 +1,74 @@
+{
+  "metrics": {
+    "tp": 300,
+    "fp": 0,
+    "tn": 400,
+    "fn": 0,
+    "total": 700,
+    "tpr": 1.0,
+    "fpr": 0.0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "accuracy": 1.0
+  },
+  "per_category": {
+    "clean": {
+      "total": 100,
+      "correct": 100,
+      "accuracy": 1.0,
+      "status_histogram": {
+        "FULLY_AUTHENTIC": 100
+      }
+    },
+    "degraded_aging": {
+      "total": 100,
+      "correct": 100,
+      "accuracy": 1.0,
+      "status_histogram": {
+        "FULLY_AUTHENTIC": 100
+      }
+    },
+    "degraded_blur": {
+      "total": 100,
+      "correct": 100,
+      "accuracy": 1.0,
+      "status_histogram": {
+        "FULLY_AUTHENTIC": 100
+      }
+    },
+    "degraded_lowdpi": {
+      "total": 100,
+      "correct": 100,
+      "accuracy": 1.0,
+      "status_histogram": {
+        "FULLY_AUTHENTIC": 100
+      }
+    },
+    "tampered_content": {
+      "total": 100,
+      "correct": 100,
+      "accuracy": 1.0,
+      "status_histogram": {
+        "TAMPERED": 100
+      }
+    },
+    "tampered_qr": {
+      "total": 100,
+      "correct": 100,
+      "accuracy": 1.0,
+      "status_histogram": {
+        "QR_MISSING": 100
+      }
+    },
+    "tampered_qr_partial": {
+      "total": 100,
+      "correct": 100,
+      "accuracy": 1.0,
+      "status_histogram": {
+        "QR_MISSING": 100
+      }
+    }
+  },
+  "target_met": true
+}
