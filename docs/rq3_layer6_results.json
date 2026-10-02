@@ -1,0 +1,45 @@
+{
+  "overall_accuracy": 0.98,
+  "total_correct": 98,
+  "total_docs": 100,
+  "target_met": true,
+  "per_category": {
+    "originals": {
+      "total": 25,
+      "expected": "ORIGINAL",
+      "correct": 25,
+      "accuracy": 1.0,
+      "status_histogram": {
+        "ORIGINAL": 25
+      }
+    },
+    "certified_copies": {
+      "total": 25,
+      "expected": "CERTIFIED_COPY",
+      "correct": 23,
+      "accuracy": 0.92,
+      "status_histogram": {
+        "CERTIFIED_COPY": 23,
+        "QR_MISSING": 2
+      }
+    },
+    "photocopies": {
+      "total": 25,
+      "expected": "ORIGINAL",
+      "correct": 25,
+      "accuracy": 1.0,
+      "status_histogram": {
+        "ORIGINAL": 25
+      }
+    },
+    "forged_copies": {
+      "total": 25,
+      "expected": "TAMPERED",
+      "correct": 25,
+      "accuracy": 1.0,
+      "status_histogram": {
+        "TAMPERED": 25
+      }
+    }
+  }
+}

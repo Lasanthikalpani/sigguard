@@ -15,6 +15,7 @@ from src.data.preprocess import SignaturePreprocessor
 from src.api.routes import benchmark
 from src.api.routers.hybrid import router as hybrid_router   # RQ3
 from src.api.routers.amendment import router as amendment_router   # RQ3 Layer 5
+from src.api.routers.copy import router as copy_router   # RQ3 Layer 6
 
 state = {}
 
@@ -66,7 +67,7 @@ app.include_router(benchmark.router)
 app.include_router(hybrid_router)
 app.include_router(amendment_router)             # ← ✅ AFTER app is defined
 
-
+app.include_router(copy_router)
 
 class VerificationResponse(BaseModel):
     model_config = {"protected_namespaces": ()}
