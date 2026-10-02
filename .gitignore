@@ -110,3 +110,8 @@ temp_*.png
 # RQ3 Layer 5 evaluation data
 data/rq3_layer5_eval/
 test_data/layer5/
+
+# Large evaluation datasets
+data/rq3_eval/
+data/rq3_layer5_eval/
+data/rq3_layer6_eval/
