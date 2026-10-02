@@ -1,11 +1,3 @@
-
----
-
-# File 2: `docs/RQ3_thesis_section.md`
-
-**මේ file එකත් අලුතින් හදන්න:**
-
-```markdown
 # Chapter X: RQ3 — Hybrid Integration (QR + AI + Blockchain)
 
 ## X.1 Introduction
@@ -16,9 +8,11 @@ This chapter presents RQ3, which addresses the following research question:
 
 > **How can QR-based cryptographic hashing be effectively integrated with AI verification to create a robust hybrid authentication system with ≥95% tamper detection reliability?**
 
-We extend this with a second, equally important question:
+We extend this with two further questions:
 
-> **How can QR-based cryptographic hashing distinguish between legitimate amendments and forgeries, while preserving cryptographic integrity?**
+> **Layer 5:** How can QR-based cryptographic hashing distinguish between legitimate amendments and forgeries, while preserving cryptographic integrity?
+>
+> **Layer 6:** How can QR-based cryptographic hashing distinguish between originals, certified copies, photocopies, and forged copies?
 
 ## X.2 Methodology
 
@@ -33,6 +27,7 @@ RQ3 introduces a multi-layer hybrid authentication architecture:
 | Layer 3 | QR + SHA-256 + HMAC | Content integrity |
 | Layer 4 | RSA signature | Non-repudiation |
 | Layer 5 | Document Amendment | Legitimate change management |
+| Layer 6 | Copy vs Original | Document type classification |
 
 ### X.2.2 Layer 3: QR Code Verification
 
