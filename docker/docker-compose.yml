@@ -1,4 +1,7 @@
+version: '3.8'
+
 services:
+  # 1. Database
   postgres:
     image: postgres:15-alpine
     container_name: sigguard_postgres
@@ -16,7 +19,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - sigguard_network
 
+  # 2. Cache / Queue
   redis:
     image: redis:7-alpine
     container_name: sigguard_redis
@@ -29,6 +35,49 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - sigguard_network
+
+  # 3. Backend API (FastAPI)
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    container_name: sigguard_api
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://sigguard:sigguard123@postgres:5432/sigguard
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - ../models:/app/models
+      - ../src:/app/src
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - sigguard_network
+
+  # 4. Frontend UI (Streamlit)
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.ui
+    container_name: sigguard_ui
+    ports:
+      - "8501:8501"
+    environment:
+      - API_URL=http://api:8000
+    depends_on:
+      - api
+    networks:
+      - sigguard_network
+
+networks:
+  sigguard_network:
+    driver: bridge
 
 volumes:
   postgres_data:
