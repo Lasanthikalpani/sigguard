@@ -78,9 +78,13 @@ if st.button("Verify Signature", type="primary", use_container_width=True):
                     inference_time = result["inference_time_ms"]
 
                     if verdict == "genuine":
-                        st.success("GENUINE")
+                         st.success(f"### ✅ GENUINE")
+                    elif verdict == "uncertain":
+                        st.warning(f"### ⚠️ UNCERTAIN - Manual Review Required")
                     else:
-                        st.error("FORGED")
+
+                        st.error(f"### ❌ FORGED")
+
 
                     col1, col2, col3 = st.columns(3)
                     col1.metric("Confidence", f"{confidence:.2%}")

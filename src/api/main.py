@@ -1,4 +1,4 @@
-﻿"""SigGuard FastAPI service (RQ1 + RQ3, industry-level)."""
+"""SigGuard FastAPI service (RQ1 + RQ3, industry-level)."""
 import io
 import time
 import os
@@ -150,7 +150,12 @@ async def verify_signature(
             distance = torch.nn.functional.pairwise_distance(emb1, emb2).item()
 
         threshold = 0.1358
-        verdict = "genuine" if distance < threshold else "forged"
+        
+        # Reverting to 2-tier for final RQ1
+        if distance < threshold:
+            verdict = "genuine"
+        else:
+            verdict = "forged"
         confidence = max(0.0, min(1.0, 1.0 - distance))
         inference_time = (time.time() - start) * 1000
 
