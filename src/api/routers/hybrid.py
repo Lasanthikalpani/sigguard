@@ -24,8 +24,8 @@ from src.api.services.crypto_service import CryptoService
 from src.api.services.qr_service import QRService
 from src.api.services.fusion_engine import FusionEngine
 
-from src.api.services.blockchain_service import get_ledger   # ← 🆕 Blockchain
-from src.api.services.qr_service import QRVerificationLayer, QRService
+from src.api.services import blockchain_service as _blockchain
+from src.api.services.blockchain_service import get_ledger   # ← 🆕 Blockchainfrom src.api.services.qr_service import QRVerificationLayer, QRService
 
 # ============================================================
 # ROUTER SETUP
@@ -271,73 +271,112 @@ async def engine_info():
     )
 
 
+# src/api/routers/hybrid.py — line 275 සිට
+
 @router.post("/issue", response_model=IssueResponse)
 async def issue_document(
     document: UploadFile = File(..., description="Document image (PNG/JPEG)"),
     signature: UploadFile = File(..., description="Signature region image"),
     document_id: Optional[str] = Form(None),
+    document_type: str = Form(..., description="BIRTH_CERTIFICATE | LAND_DEED | NATIONAL_ID | EDUCATION_CERT | VEHICLE_REG"),
     issuer: str = Form("Government of Sri Lanka"),
     ai_confidence: float = Form(0.95),
 ):
     """
-    Issue a new document with an embedded QR integrity record.
-    
+    Issue a new document with dual-hash + group-wise blockchain node.
+
     Flow:
     1. Read document + signature bytes
-    2. Compute SHA-256 hashes
-    3. Build integrity record with HMAC signature
-    4. Encode record as QR code
-    5. Return QR + record (caller embeds QR in document)
+    2. Compute content_hash (SHA-256) + metadata_hash (SHA-256) + phash (perceptual)
+    3. RSA sign over (content_hash + metadata_hash)
+    4. Build QR payload (5 fields, NO timestamp)
+    5. Write block to the correct group-wise node
+    6. Return QR + integrity record
     """
+    # ---------- 1. Read uploads ----------
     try:
         doc_bytes = await document.read()
         sig_bytes = await signature.read()
     except Exception as e:
         raise HTTPException(400, f"Failed to read uploads: {e}")
-    
+
     if not doc_bytes or not sig_bytes:
         raise HTTPException(400, "Empty document or signature")
-    
-    # Generate document ID if not provided
+
     doc_id = document_id or _generate_document_id()
-    
-    # Compute hashes
-    doc_hash = _crypto.compute_content_hash_with_mask(doc_bytes)
-    sig_hash = _crypto.compute_signature_hash(sig_bytes)
-    
-    # Build integrity record
-    record = _crypto.build_integrity_record(
-        document_id=doc_id,
-        document_hash=doc_hash,
-        signature_hash=sig_hash,
-        ai_confidence=ai_confidence,
-        metadata={"issuer": issuer},
-    )
-    
-    # Encode as QR
+
+    # ---------- 2. Hashes (dual-hash) ----------
+    content_hash  = _crypto.compute_content_hash_with_mask(doc_bytes)
+    metadata_hash = _crypto.compute_metadata_hash(issuer, doc_id)   # ← NEW
+
+    # pHash from document image (NEW)
+    from PIL import Image
+    import io
     try:
-        qr_bytes = _qr.encode_record(record)
+        doc_image = Image.open(io.BytesIO(doc_bytes))
+        phash = _crypto.compute_phash(doc_image)
+    except Exception as e:
+        raise HTTPException(400, f"Invalid document image: {e}")
+
+    # ---------- 3. RSA signature (Layer 4) ----------
+    try:
+        signature_hex = _crypto.rsa_sign(content_hash, metadata_hash)
+    except Exception as e:
+        raise HTTPException(500, f"RSA signing failed: {e}")
+
+    # ---------- 4. QR payload (5 fields, NO timestamp) ----------
+    qr_payload = {
+        "content_hash":  content_hash,
+        "metadata_hash": metadata_hash,
+        "phash":         phash,
+        "signature":     signature_hex,
+        "issuer":        issuer,
+        "document_id":   doc_id,
+        "document_type": document_type,
+    }
+    assert "timestamp" not in qr_payload, \
+        "Timestamp must NOT be in QR (Timestamp-QR fix)"
+
+    # Encode QR
+    try:
+        qr_bytes = _qr.encode_record(qr_payload)
     except Exception as e:
         raise HTTPException(500, f"QR encoding failed: {e}")
-    
-        # Add to blockchain ledger
+
+    # ---------- 5. Write to group-wise node (Layer 3) ----------
+    issued_at = datetime.utcnow().isoformat() + "Z"
     try:
-        ledger = get_ledger()
+                # Add to blockchain via get_ledger()
+                # Add to blockchain via group-wise node
+        ledger = get_ledger(document_type=document_type)
         ledger.add_document(
             doc_id=doc_id,
-            content_hash=doc_hash,
-            sig_hash=sig_hash,
+            content_hash=content_hash,
+            sig_hash=signature_hex,
             issuer=issuer,
+            issued_at=issued_at,
+            metadata={
+                "document_type": document_type,
+                "metadata_hash": metadata_hash,
+                "phash": phash,
+            },
         )
+        
     except Exception as e:
-        print(f"[WARN] Blockchain add failed: {e}")
+        raise HTTPException(500, f"Blockchain write failed: {e}")
 
+    # ---------- 6. Response ----------
     return IssueResponse(
         document_id=doc_id,
+        document_type=document_type,
         qr_base64=base64.b64encode(qr_bytes).decode("ascii"),
-        integrity_record=record,
-        issued_at=datetime.utcnow().isoformat() + "Z",
+        integrity_record=qr_payload,
+        content_hash=content_hash,
+        metadata_hash=metadata_hash,
+        phash=phash,
+        issued_at=issued_at,
     )
+
 
 
 @router.post("/verify", response_model=VerifyResponse)
@@ -397,12 +436,21 @@ async def verify_document(
     
     # Step 3: Run AI verification (RQ1)
     # Step 3: Run AI verification (RQ1) with reference if provided
+        # Step 3: Run AI verification (RQ1)
+    # Step 3: Run AI verification (RQ1) with reference if provided
     ref_bytes = await reference.read() if reference else None
     ai_result = await _run_ai_verification(sig_bytes, ref_bytes)
-        
+
     # Step 4: Fuse decisions
-    fusion_result = _fusion.fuse(ai_result, crypto_result)
-    
+    phash_new = _crypto.compute_phash(doc_bytes) if doc_bytes else None
+    phash_qr = qr_record.get("phash") if qr_record else None
+
+    fusion_result = _fusion.fuse(
+        ai_result, crypto_result,
+        phash_new=phash_new,
+        phash_qr=phash_qr,
+    )
+        
     # Step 5: Return result
     return VerifyResponse(
         is_authentic=fusion_result.is_authentic,

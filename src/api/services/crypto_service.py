@@ -289,3 +289,93 @@ class CryptoService:
         if verification.get("timestamp_valid"):
             score += 0.1
         return round(score, 4)
+
+        # -----------------------------------------------------------------
+    # NEW: RQ3 metadata_hash, pHash, Hamming, RSA (Layer 4 + Dual-Hash)
+    # -----------------------------------------------------------------
+    def compute_metadata_hash(self, issuer: str, document_id: str) -> str:
+        """
+        SHA-256 over canonical JSON {issuer, document_id}.
+        Timestamp EXCLUDED (Timestamp-QR solution p.2-4).
+        """
+        import json
+        payload = json.dumps(
+            {"issuer": issuer, "document_id": document_id},
+            sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+        )
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    def compute_phash(self, image, hash_size: int = 8) -> str:
+        """
+        64-bit perceptual hash (Dual-Hash p.7).
+        """
+        import io
+        import imagehash
+        from PIL import Image
+        if isinstance(image, (bytes, bytearray)):
+            image = Image.open(io.BytesIO(image))
+        if image.mode not in ("L", "RGB"):
+            image = image.convert("RGB")
+        if image.mode == "RGB":
+            image = image.convert("L")
+        ph = imagehash.phash(image, hash_size=hash_size)
+        return format(int(str(ph), 16), f"0{hash_size*hash_size}b")
+
+    def hamming_distance(self, hash1: str, hash2: str) -> int:
+        """Bit difference count (Dual-Hash p.7)."""
+        if len(hash1) != len(hash2):
+            raise ValueError(
+                f"Hash length mismatch: {len(hash1)} vs {len(hash2)}")
+        return sum(b1 != b2 for b1, b2 in zip(hash1, hash2))
+
+    def is_photocopy(self, phash_new: str, phash_qr: str,
+                     threshold: int = 10) -> tuple:
+        """Return (is_photocopy, hamming_distance)."""
+        h = self.hamming_distance(phash_new, phash_qr)
+        return (h <= threshold, h)
+
+    def rsa_sign(self, content_hash: str, metadata_hash: str,
+                 private_key_path: Optional[str] = None) -> str:
+        """
+        RSA-PSS signature over (content_hash + metadata_hash).
+        Layer 4 p.4.
+        """
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import padding
+        path = private_key_path or "data/rq3_dataset/rsa_keys/gov_private_key.pem"
+        with open(path, "rb") as f:
+            private_key = serialization.load_pem_private_key(
+                f.read(), password=None)
+        message = (content_hash + metadata_hash).encode("utf-8")
+        sig = private_key.sign(
+            message,
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH,
+            ),
+            hashes.SHA256(),
+        )
+        return sig.hex()
+
+    def rsa_verify(self, signature_hex: str, content_hash: str,
+                   metadata_hash: str,
+                   public_key_path: Optional[str] = None) -> bool:
+        """Verify RSA-PSS signature (Layer 4 p.4)."""
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import padding
+        path = public_key_path or "data/rq3_dataset/rsa_keys/gov_public_key.pem"
+        with open(path, "rb") as f:
+            public_key = serialization.load_pem_public_key(f.read())
+        try:
+            public_key.verify(
+                bytes.fromhex(signature_hex),
+                (content_hash + metadata_hash).encode("utf-8"),
+                padding.PSS(
+                    mgf=padding.MGF1(hashes.SHA256()),
+                    salt_length=padding.PSS.MAX_LENGTH,
+                ),
+                hashes.SHA256(),
+            )
+            return True
+        except Exception:
+            return False

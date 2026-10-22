@@ -27,9 +27,24 @@ class BlockchainLedger:
     Simple blockchain ledger for document authentication.
     """
 
-    def __init__(self, ledger_path: str = "data/blockchain/ledger.json"):
-        self.ledger_path = Path(ledger_path)
+    def __init__(self, ledger_path: str = None, document_type: str = None):
+        if ledger_path:
+            self.ledger_path = Path(ledger_path)
+        elif document_type:
+            NODE_MAP = {
+                "BIRTH_CERTIFICATE": "ledger_birth_certs.json",
+                "LAND_DEED":         "ledger_land_deeds.json",
+                "NATIONAL_ID":       "ledger_national_ids.json",
+                "EDUCATION_CERT":    "ledger_education_certs.json",
+                "VEHICLE_REG":       "ledger_vehicle_reg.json",
+            }
+            node_file = NODE_MAP.get(document_type, "ledger_unknown.json")
+            self.ledger_path = Path(f"data/rq3_dataset/blockchain/{node_file}")
+        else:
+            self.ledger_path = Path("data/blockchain/ledger.json")
+        
         self.ledger_path.parent.mkdir(parents=True, exist_ok=True)
+        self.chain = []           # ← NEW: Initialize chain
         self._load()
 
     def _load(self):
@@ -230,9 +245,15 @@ class BlockchainLedger:
 # Singleton
 _ledger = None
 
+_ledgers = {}
 
-def get_ledger() -> BlockchainLedger:
-    global _ledger
-    if _ledger is None:
-        _ledger = BlockchainLedger()
-    return _ledger
+def get_ledger(document_type: str = None) -> BlockchainLedger:
+    """Get the correct ledger node for a document type."""
+    global _ledgers
+    key = document_type or "default"
+    if key not in _ledgers:
+        if document_type:
+            _ledgers[key] = BlockchainLedger(document_type=document_type)
+        else:
+            _ledgers[key] = BlockchainLedger()
+    return _ledgers[key]

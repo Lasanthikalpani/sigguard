@@ -127,6 +127,8 @@ class FusionEngine:
         self,
         ai_result: Dict[str, Any],
         crypto_result: Dict[str, Any],
+        phash_new: str = None,
+        phash_qr: str = None,
     ) -> FusionResult:
         """
         Fuse AI and crypto verification results into a single decision.
@@ -141,6 +143,44 @@ class FusionEngine:
         Returns:
             FusionResult with combined decision
         """
+                # NEW: Dual-Hash pHash fallback (Dual-Hash p.8)
+        if not crypto_result.get("is_valid", False) and phash_new and phash_qr:
+            try:
+                hamming = sum(b1 != b2 for b1, b2 in zip(phash_new, phash_qr))
+            except Exception:
+                hamming = 64
+            
+            if hamming <= 10:
+                return FusionResult(
+                    is_authentic=True,
+                    confidence=round(1 - (hamming / 64), 4),
+                    ai_score=float(ai_result.get("similarity", 0.0)),
+                    crypto_score=0.9,
+                    tamper_detected=False,
+                    decision_path="HYBRID_PHOTOCOPY",
+                    explanations={
+                        "result": "PHOTOCOPY",
+                        "hamming_distance": hamming,
+                        "reason": f"pHash match (Hamming={hamming}≤10)",
+                    },
+                )
+            else:
+                return FusionResult(
+                    is_authentic=False,
+                    confidence=0.95,
+                    ai_score=float(ai_result.get("similarity", 0.0)),
+                    crypto_score=0.5,
+                    tamper_detected=True,
+                    decision_path="HYBRID_TAMPERED",
+                    explanations={
+                        "result": "TAMPERED",
+                        "hamming_distance": hamming,
+                        "reason": f"pHash mismatch (Hamming={hamming}>10)",
+                    },
+                )
+
+        # Extract AI score
+        ai_score = float(ai_result.get("similarity", 0.0))
         # Extract AI score
         ai_score = float(ai_result.get("similarity", 0.0))
         ai_score = max(0.0, min(1.0, ai_score))  # Clamp to [0, 1]
