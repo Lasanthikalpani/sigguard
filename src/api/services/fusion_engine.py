@@ -123,12 +123,15 @@ class FusionEngine:
     # MAIN FUSION LOGIC
     # ============================================================
     
+    # fusion_engine.py එකේ fuse() function එකට මෙය එකතු කරන්න
+
     def fuse(
-        self,
-        ai_result: Dict[str, Any],
-        crypto_result: Dict[str, Any],
-        phash_new: str = None,
-        phash_qr: str = None,
+    self,
+    ai_result: Dict[str, Any],
+    crypto_result: Dict[str, Any],
+    ledger_entry: Dict[str, Any] = None,  # <--- අලුතින් එකතු කළ කොටස
+    phash_new: str = None,
+    phash_qr: str = None,
     ) -> FusionResult:
         """
         Fuse AI and crypto verification results into a single decision.
@@ -214,6 +217,13 @@ class FusionEngine:
             decision_path = PATH_AUTHENTIC
             is_authentic = True
             tamper_detected = False
+            # PDF පිටුව 6 සහ 7 ට අනුව Original/Copy වෙන් කිරීම
+            if ledger_entry:
+                doc_type = ledger_entry.get("document_type", "UNKNOWN")
+                if doc_type == "CERTIFIED_COPY":
+                    decision_path = "FULLY_AUTHENTIC_CERTIFIED_COPY"
+                elif doc_type == "ORIGINAL":
+                    decision_path = "FULLY_AUTHENTIC_ORIGINAL"
         else:
             # Both pass but combined score low (shouldn't happen with
             # proper thresholds, but defensive)

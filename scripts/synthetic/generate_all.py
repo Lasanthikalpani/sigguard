@@ -56,3 +56,4 @@ if __name__ == "__main__":
     g.add_argument("--smoke", action="store_true")
     args = ap.parse_args()
     main(full=not args.smoke)
+    
