@@ -244,3 +244,4 @@ class CopyService:
         return mapping.get(doc_type, {"emoji": "❓", "label": doc_type,
                                        "description": "Unknown",
                                        "color": "gray"})
+    

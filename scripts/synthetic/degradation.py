@@ -1,31 +1,56 @@
 # scripts/synthetic/degradation.py
 
-import numpy as np
+import os
 from PIL import Image, ImageFilter, ImageEnhance
+import sys
 
-def degrade_aging(img: Image.Image, severity: float = 0.5) -> Image.Image:
-    """Yellowing + brown spots + faded text."""
-    arr = np.array(img).astype(np.float32)
-    # Yellow tint
-    arr[:, :, 2] *= (1 - 0.3 * severity)  # reduce blue
-    arr[:, :, 1] *= (1 - 0.1 * severity)
-    # Add brown spots
-    h, w = arr.shape[:2]
-    n_spots = int(50 * severity)
-    for _ in range(n_spots):
-        cx, cy = np.random.randint(0, w), np.random.randint(0, h)
-        r = np.random.randint(5, 25)
-        yy, xx = np.ogrid[:h, :w]
-        mask = (xx - cx)**2 + (yy - cy)**2 <= r**2
-        arr[mask] = arr[mask] * 0.7 + np.array([120, 80, 40]) * 0.3
-    return Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+if PROJECT_ROOT not in sys.path:
+    sys.path.append(PROJECT_ROOT)
 
-def degrade_blur(img: Image.Image, radius: int = 3) -> Image.Image:
-    return img.filter(ImageFilter.GaussianBlur(radius=radius))
 
-def degrade_low_dpi(img: Image.Image, target_dpi: int = 150) -> Image.Image:
-    """Simulate low-DPI scan by downsampling then upsampling."""
-    w, h = img.size
-    scale = target_dpi / 600
-    small = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
-    return small.resize((w, h), Image.LANCZOS)
+def _create_base_document(idx: int) -> Image.Image:
+    """Create a basic placeholder document image."""
+    img = Image.new('RGB', (400, 400), color='white')
+    from PIL import ImageDraw
+    draw = ImageDraw.Draw(img)
+    draw.text((50, 50), f"Document {idx}", fill='black')
+    draw.text((50, 100), "Name: John Doe", fill='black')
+    draw.text((50, 150), "DOB: 1990-01-15", fill='black')
+    return img
+
+
+def generate_degraded(output_dir: str = "data/rq3_dataset", full: bool = False):
+    """
+    Generate degraded documents (aging, blur, low_dpi).
+    """
+    n = 100 if full else 10
+    
+    degradations = ["degraded_aging", "degraded_blur", "degraded_lowdpi"]
+    
+    for deg_name in degradations:
+        base_dir = os.path.join(output_dir, "rq3_eval", deg_name)
+        os.makedirs(base_dir, exist_ok=True)
+        
+        print(f"  Generating {n} {deg_name} documents...")
+        
+        for i in range(n):
+            img = _create_base_document(i)
+            
+            if deg_name == "degraded_aging":
+                # Yellow tint + contrast reduction
+                img = ImageEnhance.Color(img).enhance(0.5)
+                img = ImageEnhance.Contrast(img).enhance(0.8)
+            elif deg_name == "degraded_blur":
+                # Gaussian blur
+                img = img.filter(ImageFilter.GaussianBlur(radius=2))
+            elif deg_name == "degraded_lowdpi":
+                # Downsample then upsample
+                w, h = img.size
+                img = img.resize((w // 4, h // 4), Image.LANCZOS)
+                img = img.resize((w, h), Image.LANCZOS)
+            
+            img.save(os.path.join(base_dir, f"{deg_name}_{i:04d}.png"))
+        
+        print(f"  ✓ Generated {n} images in {base_dir}")
+        
