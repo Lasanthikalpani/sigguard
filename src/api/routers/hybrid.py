@@ -343,11 +343,10 @@ async def issue_document(
     except Exception as e:
         raise HTTPException(500, f"QR encoding failed: {e}")
 
-    # ---------- 5. Write to group-wise node (Layer 3) ----------
+        # ---------- 5. Write to group-wise node (Layer 3) ----------
     issued_at = datetime.utcnow().isoformat() + "Z"
     try:
-                # Add to blockchain via get_ledger()
-                # Add to blockchain via group-wise node
+        # Add to blockchain via group-wise node
         ledger = get_ledger(document_type=document_type)
         ledger.add_document(
             doc_id=doc_id,
@@ -357,11 +356,12 @@ async def issue_document(
             issued_at=issued_at,
             metadata={
                 "document_type": document_type,
+                "document_status": "ORIGINAL",       # ← 🆕 මෙය එකතු කරන්න
                 "metadata_hash": metadata_hash,
                 "phash": phash,
+                "copy_of": None,                     # ← 🆕 මෙය එකතු කරන්න
             },
         )
-        
     except Exception as e:
         raise HTTPException(500, f"Blockchain write failed: {e}")
 
@@ -604,21 +604,7 @@ async def issue_and_embed(
        # ============================================================
     # NEW: Add to blockchain ledger
     # ============================================================
-    try:
-        ledger = get_ledger()
-        block = ledger.add_document(
-            doc_id=doc_id,
-            content_hash=doc_hash,
-            sig_hash=sig_hash,
-            issuer=issuer,
-            issued_at=datetime.utcnow().isoformat() + "Z",
-            metadata={
-                "issuer_display": issuer,
-                "ai_confidence": ai_confidence,
-            },
-        )
-        block_hash = block["block_hash"]
-        block_index = block["index"]
+    
     except Exception as e:
         # Log but don't fail — blockchain is optional
         block_hash = None
