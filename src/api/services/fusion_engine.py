@@ -125,35 +125,23 @@ class FusionEngine:
     
     # fusion_engine.py එකේ fuse() function එකට මෙය එකතු කරන්න
 
-    def fuse(
-    self,
-    ai_result: Dict[str, Any],
-    crypto_result: Dict[str, Any],
-    ledger_entry: Dict[str, Any] = None,  # <--- අලුතින් එකතු කළ කොටස
-    phash_new: str = None,
-    phash_qr: str = None,
-    ) -> FusionResult:
+    def fuse(self, ai_result, crypto_result, phash_new=None, phash_qr=None):
         """
         Fuse AI and crypto verification results into a single decision.
         
-        Args:
-            ai_result: {'similarity': float, 'prediction': str, ...}
-                - similarity: AI similarity score in [0, 1]
-                - prediction: 'genuine' or 'forged' (optional)
-            crypto_result: {'hmac_valid': bool, 'document_match': bool, ...}
-                - From CryptoService.verify_integrity_record()
-        
-        Returns:
-            FusionResult with combined decision
+        Includes Dual-Hash (pHash) fallback for Photocopy Detection.
         """
-                # NEW: Dual-Hash pHash fallback (Dual-Hash p.8)
-        if not crypto_result.get("is_valid", False) and phash_new and phash_qr:
+        # ============================================================
+        # 🆕 Dual-Hash pHash fallback (PDF: Photocopy Hash Mismatch)
+        # ============================================================
+        if phash_new and phash_qr:
             try:
                 hamming = sum(b1 != b2 for b1, b2 in zip(phash_new, phash_qr))
             except Exception:
                 hamming = 64
             
             if hamming <= 10:
+                # Exact hash failed but pHash matches → PHOTOCOPY
                 return FusionResult(
                     is_authentic=True,
                     confidence=round(1 - (hamming / 64), 4),
@@ -168,6 +156,7 @@ class FusionEngine:
                     },
                 )
             else:
+                # Both exact and pHash failed → TAMPERED
                 return FusionResult(
                     is_authentic=False,
                     confidence=0.95,
@@ -182,26 +171,27 @@ class FusionEngine:
                     },
                 )
 
-        # Extract AI score
-        ai_score = float(ai_result.get("similarity", 0.0))
+        # ============================================================
+        # Original Fusion Logic (Exact Hash + AI)
+        # ============================================================
         # Extract AI score
         ai_score = float(ai_result.get("similarity", 0.0))
         ai_score = max(0.0, min(1.0, ai_score))  # Clamp to [0, 1]
-        
+
         # Compute crypto score
         crypto_score = self.compute_crypto_score(crypto_result)
-        
+
         # Weighted fusion
         combined = (
             self.ai_weight * ai_score +
             self.crypto_weight * crypto_score
         )
         combined = round(combined, 4)
-        
+
         # Decision logic with hard constraints
         crypto_failed = crypto_score < self.crypto_threshold
         ai_failed = ai_score < self.ai_threshold
-        
+
         if crypto_failed:
             # HARD CONSTRAINT: crypto failure → tamper
             decision_path = PATH_CRYPTO_TAMPER
@@ -217,29 +207,18 @@ class FusionEngine:
             decision_path = PATH_AUTHENTIC
             is_authentic = True
             tamper_detected = False
-            # PDF පිටුව 6 සහ 7 ට අනුව Original/Copy වෙන් කිරීම
-            if ledger_entry:
-                doc_type = ledger_entry.get("document_type", "UNKNOWN")
-                if doc_type == "CERTIFIED_COPY":
-                    decision_path = "FULLY_AUTHENTIC_CERTIFIED_COPY"
-                elif doc_type == "ORIGINAL":
-                    decision_path = "FULLY_AUTHENTIC_ORIGINAL"
         else:
             # Both pass but combined score low (shouldn't happen with
             # proper thresholds, but defensive)
             decision_path = PATH_LOW_CONFIDENCE
             is_authentic = False
             tamper_detected = False
-        
+
         # Build explanations
         explanations = self._build_explanations(
-            ai_result=ai_result,
-            crypto_result=crypto_result,
-            ai_score=ai_score,
-            crypto_score=crypto_score,
-            combined=combined,
+            ai_result, crypto_result, ai_score, crypto_score, combined
         )
-        
+
         return FusionResult(
             is_authentic=is_authentic,
             confidence=combined,
@@ -250,6 +229,7 @@ class FusionEngine:
             explanations=explanations,
         )
     
+
     def _build_explanations(
         self,
         ai_result: Dict[str, Any],

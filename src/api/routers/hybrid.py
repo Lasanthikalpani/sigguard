@@ -71,9 +71,14 @@ class IssueRequest(BaseModel):
 class IssueResponse(BaseModel):
     """Response for document issuance."""
     document_id: str
+    document_type: str          # ← 🆕
     qr_base64: str
     integrity_record: dict
+    content_hash: str           # ← 🆕
+    metadata_hash: str          # ← 🆕
+    phash: str                  # ← 🆕
     issued_at: str
+
 
 
 class VerifyResponse(BaseModel):
@@ -282,17 +287,6 @@ async def issue_document(
     issuer: str = Form("Government of Sri Lanka"),
     ai_confidence: float = Form(0.95),
 ):
-    """
-    Issue a new document with dual-hash + group-wise blockchain node.
-
-    Flow:
-    1. Read document + signature bytes
-    2. Compute content_hash (SHA-256) + metadata_hash (SHA-256) + phash (perceptual)
-    3. RSA sign over (content_hash + metadata_hash)
-    4. Build QR payload (5 fields, NO timestamp)
-    5. Write block to the correct group-wise node
-    6. Return QR + integrity record
-    """
     # ---------- 1. Read uploads ----------
     try:
         doc_bytes = await document.read()
@@ -307,16 +301,7 @@ async def issue_document(
 
     # ---------- 2. Hashes (dual-hash) ----------
     content_hash  = _crypto.compute_content_hash_with_mask(doc_bytes)
-    metadata_hash = _crypto.compute_metadata_hash(issuer, doc_id)   # ← NEW
-
-    # pHash from document image (NEW)
-    from PIL import Image
-    import io
-    try:
-        doc_image = Image.open(io.BytesIO(doc_bytes))
-        phash = _crypto.compute_phash(doc_image)
-    except Exception as e:
-        raise HTTPException(400, f"Invalid document image: {e}")
+    metadata_hash = _crypto.compute_metadata_hash(issuer, doc_id)
 
     # ---------- 3. RSA signature (Layer 4) ----------
     try:
@@ -328,14 +313,13 @@ async def issue_document(
     qr_payload = {
         "content_hash":  content_hash,
         "metadata_hash": metadata_hash,
-        "phash":         phash,
+        "phash":         "",  # ← පසුව පුරවන්න
         "signature":     signature_hex,
         "issuer":        issuer,
         "document_id":   doc_id,
         "document_type": document_type,
     }
-    assert "timestamp" not in qr_payload, \
-        "Timestamp must NOT be in QR (Timestamp-QR fix)"
+    assert "timestamp" not in qr_payload, "Timestamp must NOT be in QR"
 
     # Encode QR
     try:
@@ -343,10 +327,35 @@ async def issue_document(
     except Exception as e:
         raise HTTPException(500, f"QR encoding failed: {e}")
 
-        # ---------- 5. Write to group-wise node (Layer 3) ----------
+    # 🆕 ---------- 4b. Embed QR and recompute phash ----------
+    try:
+        from PIL import Image
+        import io
+        
+        doc_img = Image.open(io.BytesIO(doc_bytes)).convert("RGB")
+        qr_img = Image.open(io.BytesIO(qr_bytes)).convert("RGB")
+        
+        qr_size = 400
+        qr_img = qr_img.resize((qr_size, qr_size), Image.LANCZOS)
+        doc_img.paste(qr_img, (doc_img.width - qr_size - 50, 50))
+        
+        buf = io.BytesIO()
+        doc_img.save(buf, format="PNG")
+        embedded_doc_bytes = buf.getvalue()
+        
+        # Embed කළ ලේඛනයේ pHash
+        phash = _crypto.compute_phash(embedded_doc_bytes)
+        
+        # QR payload එකට phash එකතු කර නැවත QR එක සාදන්න
+        qr_payload["phash"] = phash
+        qr_bytes = _qr.encode_record(qr_payload)
+        
+    except Exception as e:
+        raise HTTPException(500, f"QR embedding failed: {e}")
+
+    # ---------- 5. Write to group-wise node (Layer 3) ----------
     issued_at = datetime.utcnow().isoformat() + "Z"
     try:
-        # Add to blockchain via group-wise node
         ledger = get_ledger(document_type=document_type)
         ledger.add_document(
             doc_id=doc_id,
@@ -356,16 +365,18 @@ async def issue_document(
             issued_at=issued_at,
             metadata={
                 "document_type": document_type,
-                "document_status": "ORIGINAL",       # ← 🆕 මෙය එකතු කරන්න
+                "document_status": "ORIGINAL",
                 "metadata_hash": metadata_hash,
                 "phash": phash,
-                "copy_of": None,                     # ← 🆕 මෙය එකතු කරන්න
+                "copy_of": None,
             },
         )
     except Exception as e:
         raise HTTPException(500, f"Blockchain write failed: {e}")
 
     # ---------- 6. Response ----------
+           # ---------- 6. Response ----------
+        # ---------- 6. Response ----------
     return IssueResponse(
         document_id=doc_id,
         document_type=document_type,
@@ -379,35 +390,29 @@ async def issue_document(
 
 
 
-@router.post("/verify", response_model=VerifyResponse)
+@router.post("/verify")
 async def verify_document(
-    document: UploadFile = File(..., description="Document image with embedded QR"),
-    signature: UploadFile = File(..., description="Signature region image"),
-    reference: Optional[UploadFile] = File(None, description="Reference signature (for AI comparison)"),
+    document: UploadFile = File(...),
+    signature: UploadFile = File(...),
+    reference: UploadFile = File(None),
 ):
     """
-    Full hybrid verification:
-    
-    1. Extract and decode QR from document
-    2. Verify cryptographic integrity (HMAC + hash + timestamp)
-    3. Run AI signature verification (RQ1 Siamese CNN)
-    4. Fuse AI + crypto decisions
-    5. Return combined verdict with explanations
+    Full hybrid verification (RQ3).
     """
+    from src.api.services.crypto_service import CryptoService
+    
     try:
         doc_bytes = await document.read()
         sig_bytes = await signature.read()
     except Exception as e:
-        raise HTTPException(400, f"Failed to read uploads: {e}")
-    
+        raise HTTPException(400, f"Failed to read document: {e}")
+
     if not doc_bytes or not sig_bytes:
         raise HTTPException(400, "Empty document or signature")
-    
-    # Step 1: Decode QR from document
+
+    # Step 1: Decode QR
     qr_record = _qr.decode_from_document(doc_bytes)
-    
-    if qr_record is None:
-        # No QR found — return immediate tamper verdict
+    if qr_record is None or "_error" in qr_record:
         return VerifyResponse(
             is_authentic=False,
             confidence=0.0,
@@ -422,10 +427,7 @@ async def verify_document(
             document_id=None,
             verified_at=datetime.utcnow().isoformat() + "Z",
         )
-    
-    if "_error" in qr_record:
-        raise HTTPException(400, f"QR parse error: {qr_record['_error']}")
-    
+
     # Step 2: Verify cryptographic integrity
     current_hash = _crypto.compute_content_hash_with_mask(doc_bytes)
     crypto_result = _crypto.verify_integrity_record(
@@ -433,23 +435,41 @@ async def verify_document(
         current_hash,
         skip_document_match=False,
     )
-    
-    # Step 3: Run AI verification (RQ1)
-    # Step 3: Run AI verification (RQ1) with reference if provided
-        # Step 3: Run AI verification (RQ1)
-    # Step 3: Run AI verification (RQ1) with reference if provided
+
+    # Step 3: Run AI verification
     ref_bytes = await reference.read() if reference else None
     ai_result = await _run_ai_verification(sig_bytes, ref_bytes)
 
-    # Step 4: Fuse decisions
-    phash_new = _crypto.compute_phash(doc_bytes) if doc_bytes else None
+    # Step 4: Dual-Hash pHash Fallback (NEW)
+    crypto = CryptoService()
+    phash_new = crypto.compute_phash(doc_bytes) if doc_bytes else None
     phash_qr = qr_record.get("phash") if qr_record else None
 
+    # Debug prints
+    print(f"[DEBUG] phash_new = {phash_new}")
+    print(f"[DEBUG] phash_qr = {phash_qr}")
+    print(f"[DEBUG] crypto_result = {crypto_result}")
+
+    # Step 5: Fuse decisions (with pHash fallback)
     fusion_result = _fusion.fuse(
         ai_result, crypto_result,
         phash_new=phash_new,
         phash_qr=phash_qr,
     )
+
+    # Step 6: Return result
+    return VerifyResponse(
+        is_authentic=fusion_result.is_authentic,
+        confidence=fusion_result.confidence,
+        ai_score=fusion_result.ai_score,
+        crypto_score=fusion_result.crypto_score,
+        tamper_detected=fusion_result.tamper_detected,
+        decision_path=fusion_result.decision_path,
+        explanations=fusion_result.explanations,
+        document_id=qr_record.get("doc_id"),
+        verified_at=datetime.utcnow().isoformat() + "Z",
+    )
+
         
     # Step 5: Return result
     return VerifyResponse(
@@ -539,90 +559,133 @@ async def verify_batch(
 
 @router.post("/issue-and-embed")
 async def issue_and_embed(
-    document: UploadFile = File(..., description="Document image (PNG/JPEG)"),
-    signature: UploadFile = File(..., description="Signature region image"),
+    document: UploadFile = File(...),
+    signature: UploadFile = File(...),
     document_id: Optional[str] = Form(None),
+    document_type: str = Form(...),
     issuer: str = Form("Government of Sri Lanka"),
     ai_confidence: float = Form(0.95),
 ):
     """
     Issue a document AND return the stamped image with QR embedded.
-
-    Combines /issue + QR embedding in a single API call, so the client
-    (Streamlit) does not need to import QRService locally.
-
-    Returns:
-        document_id: Generated or custom ID
-        qr_base64: QR code as base64 PNG (standalone)
-        stamped_document_base64: Document with QR embedded (base64 PNG)
-        integrity_record: Full integrity record dict
-        issued_at: ISO timestamp
     """
-    try:
-        doc_bytes = await document.read()
-        sig_bytes = await signature.read()
-    except Exception as e:
-        raise HTTPException(400, f"Failed to read uploads: {e}")
-
+    from PIL import Image
+    import io
+    import base64 as _b64
+    from datetime import datetime as _dt
+    from src.api.services.qr_service import QRService
+    from src.api.services.crypto_service import CryptoService
+    from src.api.services.blockchain_service import get_ledger
+    
+    # 🆕 CryptoService instance එකක් සාදන්න
+    crypto = CryptoService()
+    qr_service = QRService()
+    
+    # 1. Read bytes
+    doc_bytes = await document.read()
+    sig_bytes = await signature.read()
     if not doc_bytes or not sig_bytes:
         raise HTTPException(400, "Empty document or signature")
-
-    # Generate document ID
-    doc_id = document_id or _generate_document_id()
-
-    # Compute hashes
-
-    # Compute hashes with QR region masked (for tamper detection)
-    doc_hash = _crypto.compute_content_hash_with_mask(doc_bytes)
-    sig_hash = _crypto.compute_signature_hash(sig_bytes)
-
-    # Build integrity record
-    record = _crypto.build_integrity_record(
-        document_id=doc_id,
-        document_hash=doc_hash,
-        signature_hash=sig_hash,
-        ai_confidence=ai_confidence,
-        metadata={"issuer": issuer},
-    )
-
-    # Encode QR
-    try:
-        qr_bytes = _qr.encode_record(record)
-    except Exception as e:
-        raise HTTPException(500, f"QR encoding failed: {e}")
-
-    # Embed QR into document (SERVER-SIDE)
-    try:
-        stamped_bytes = _qr.embed_in_document(
-            doc_bytes,
-            qr_bytes,
-            position="bottom-right",
-        )
-    except Exception as e:
-        raise HTTPException(500, f"QR embedding failed: {e}")
-
-       # ============================================================
-    # NEW: Add to blockchain ledger
-    # ============================================================
     
-    except Exception as e:
-        # Log but don't fail — blockchain is optional
-        block_hash = None
-        block_index = None
-        print(f"[WARN] Blockchain add failed: {e}")
+    doc_id = document_id or _generate_document_id()
+    
+    # 2. Hashes (instance methods)
+    content_hash = crypto.compute_content_hash_with_mask(doc_bytes)
+    metadata_hash = crypto.compute_metadata_hash(issuer, doc_id)
+    
+    # 3. RSA sign
+    signature_hex = crypto.rsa_sign(content_hash, metadata_hash)
+    
+    # 4. QR payload
+        # 4. QR payload
+    qr_payload = {
+        "content_hash": content_hash,
+        "metadata_hash": metadata_hash,
+        "phash": "",
+        "signature": signature_hex,
+        "issuer": issuer,
+        "document_id": doc_id,
+        "document_type": document_type,
+    }
+    assert "timestamp" not in qr_payload
 
-    # Return both QR and stamped document as base64
+    # 5. පළමු QR එක encode කරන්න
+    qr_bytes = qr_service.encode_record(qr_payload)
+    qr_img = Image.open(io.BytesIO(qr_bytes)).convert("RGB")
+
+    # 6. QR එක ලේඛනයට embed කරන්න
+    doc_img = Image.open(io.BytesIO(doc_bytes)).convert("RGB")
+    qr_size = 300
+    qr_img = qr_img.resize((qr_size, qr_size), Image.LANCZOS)
+    x = 50
+    y = doc_img.height - qr_size - 50
+    doc_img.paste(qr_img, (x, y))
+
+    # 7. Embed කළ ලේඛනයේ pHash ගණනය කරන්න
+    buf = io.BytesIO()
+    doc_img.save(buf, format="PNG")
+    embedded_bytes = buf.getvalue()
+    phash = crypto.compute_phash(embedded_bytes)
+
+    # 8. QR payload එකට phash එකතු කර, නැවත QR එක encode කරන්න
+    qr_payload["phash"] = phash
+    qr_bytes = qr_service.encode_record(qr_payload)
+    qr_img = Image.open(io.BytesIO(qr_bytes)).convert("RGB")
+    qr_img = qr_img.resize((qr_size, qr_size), Image.LANCZOS)
+
+    # 9. නව QR එක නැවත ලේඛනයට embed කරන්න
+    doc_img.paste(qr_img, (x, y))
+    buf = io.BytesIO()
+    doc_img.save(buf, format="PNG")
+    embedded_bytes = buf.getvalue()
+    
+    # 10. නව embedded_bytes හි pHash ගණනය කරන්න
+    final_phash = crypto.compute_phash(embedded_bytes)
+    # 🆕 QR එකේ phash එක, ලේඛනයේ phash එකට සමාන කරන්න
+    qr_payload["phash"] = final_phash
+    qr_bytes = qr_service.encode_record(qr_payload)
+    
+    # 11. අවසාන QR එක නැවත embed කරන්න
+    qr_img = Image.open(io.BytesIO(qr_bytes)).convert("RGB")
+    qr_img = qr_img.resize((qr_size, qr_size), Image.LANCZOS)
+    doc_img.paste(qr_img, (x, y))
+    buf = io.BytesIO()
+    doc_img.save(buf, format="PNG")
+    embedded_bytes = buf.getvalue()
+    phash = crypto.compute_phash(embedded_bytes)
+    
+    # 8. Update QR payload with phash and re-encode
+    qr_payload["phash"] = phash
+    qr_bytes = qr_service.encode_record(qr_payload)
+    
+    # 9. Write to blockchain
+    issued_at = _dt.utcnow().isoformat() + "Z"
+    ledger = get_ledger(document_type=document_type)
+    ledger.add_document(
+        doc_id=doc_id,
+        content_hash=content_hash,
+        sig_hash=signature_hex,
+        issuer=issuer,
+        issued_at=issued_at,
+        metadata={
+            "document_type": document_type,
+            "document_status": "ORIGINAL",
+            "metadata_hash": metadata_hash,
+            "phash": phash,
+            "copy_of": None,
+        },
+    )
+    
+    # 10. Return response
     return {
         "document_id": doc_id,
-        "qr_base64": base64.b64encode(qr_bytes).decode("ascii"),
-        "stamped_document_base64": base64.b64encode(stamped_bytes).decode("ascii"),
-        "integrity_record": record,
-        "blockchain": {
-            "block_hash": block_hash,
-            "block_index": block_index,
-        },
-        "issued_at": datetime.utcnow().isoformat() + "Z",
+        "document_type": document_type,
+        "qr_base64": _b64.b64encode(qr_bytes).decode("ascii"),
+        "stamped_document_base64": _b64.b64encode(embedded_bytes).decode("ascii"),
+        "integrity_record": qr_payload,
+        "issued_at": issued_at,
     }
+
 
 
 # ============================================================
