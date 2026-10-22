@@ -115,3 +115,7 @@ test_data/layer5/
 data/rq3_eval/
 data/rq3_layer5_eval/
 data/rq3_layer6_eval/
+openapi.json
+test_stamped_document.png
+test_verify.py
+test_data/
