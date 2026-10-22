@@ -105,33 +105,33 @@ class BlockchainLedger:
         self._save()
         return new_block
 
-    def add_certified_copy(
-        self,
-        original_doc_id: str,
-        certifier: str = "GovLK",
-    ) -> Dict[str, Any]:
+    # src/api/services/blockchain_service.py හි
+    def add_certified_copy(self, original_doc_id, certifier):
         original = self.get_document(original_doc_id)
-        if original is None:
-            raise ValueError(f"Original document not found: {original_doc_id}")
+        if not original:
+            raise ValueError("Original document not found")
 
-        prev_block = self.chain[-1]
         new_block = {
-            "index": len(self.chain),
-            "doc_id": f"{original_doc_id}-COPY-{len(self.chain)}",
-            "content_hash": original["content_hash"],           # SAME
-            "sig_hash": original["sig_hash"],
-            "issuer": certifier,
-            "issued_at": datetime.utcnow().isoformat() + "Z",   # NEW
-            "prev_hash": prev_block["block_hash"],
-            "metadata": {
-                "is_certified_copy": True,
-                "original_doc_id": original_doc_id,
-            },
+        "index": len(self.chain),
+        "doc_id": original_doc_id,
+        "content_hash": original["content_hash"],  # SAME
+        "sig_hash": original["sig_hash"],          # SAME
+        "issuer": certifier,
+        "issued_at": datetime.utcnow().isoformat() + "Z",  # NEW timestamp
+        "prev_hash": self.chain[-1]["block_hash"],
+        "metadata": {
+            "document_type": original["metadata"]["document_type"],
+            "document_status": "CERTIFIED_COPY",   # ← NEW status
+            "metadata_hash": original["metadata"]["metadata_hash"],  # SAME
+            "phash": original["metadata"]["phash"],  # SAME
+            "copy_of": original_doc_id  # ← Reference to original
         }
+    }
         new_block["block_hash"] = self._compute_block_hash(new_block)
         self.chain.append(new_block)
         self._save()
         return new_block
+
 
     # ============================================================
     # LAYER 5: DOCUMENT AMENDMENT

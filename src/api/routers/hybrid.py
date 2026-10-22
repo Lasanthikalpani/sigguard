@@ -637,8 +637,9 @@ class LedgerLookupRequest(BaseModel):
 class CertifiedCopyRequest(BaseModel):
     """Request body for certified copy issuance."""
     original_doc_id: str = Field(..., description="Original document ID")
+    document_type: str = Field("BIRTH_CERTIFICATE", description="Document type (e.g., BIRTH_CERTIFICATE)")  # ← 🆕 මෙය එකතු කරන්න
     certifier: str = Field("GovLK", description="Certifying authority")
-
+    
 
 @router.get("/ledger/stats")
 async def ledger_stats():
@@ -684,41 +685,41 @@ async def verify_chain():
         raise HTTPException(500, f"Chain verification failed: {e}")
 
 
+class LedgerLookupRequest(BaseModel):
+    doc_id: str
+    document_type: str = None  # ← 🆕 මෙය එකතු කරන්න
+
 @router.post("/ledger/lookup")
 async def ledger_lookup(req: LedgerLookupRequest):
-    """
-    Look up a document in the blockchain ledger by doc_id.
+    # 🆕 Group-wise node එක තෝරන්න
+    ledger = get_ledger(document_type=req.document_type) if req.document_type else get_ledger()
+    
+    block = ledger.get_document(req.doc_id)
+    if block is None:
+        raise HTTPException(404, f"Document not found: {req.doc_id}")
+    return {"status": "ok", "document": block}
 
-    Returns the full block if found, or 404 if not.
-    """
-    try:
-        ledger = get_ledger()
-        block = ledger.get_document(req.doc_id)
-        if block is None:
-            raise HTTPException(404, f"Document not found: {req.doc_id}")
-        return {
-            "status": "ok",
-            "block": block,
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(500, f"Lookup failed: {e}")
+
 
 
 @router.get("/ledger/find-by-hash")
-async def find_by_hash(content_hash: str):
+async def find_by_hash(content_hash: str, document_type: str = None):
     """
     Find all blocks matching a content hash (original + certified copies).
 
-    Query parameter: content_hash
+    Query parameters: 
+    - content_hash (required)
+    - document_type (optional, e.g., BIRTH_CERTIFICATE)
     """
     try:
-        ledger = get_ledger()
+        # 🆕 document_type එකක් ලබා දී ඇත්නම්, එම Group-wise node එක තෝරන්න
+        ledger = get_ledger(document_type=document_type) if document_type else get_ledger()
+        
         blocks = ledger.find_by_content_hash(content_hash)
         return {
             "status": "ok",
             "content_hash": content_hash,
+            "document_type": document_type or "ALL",
             "matches": len(blocks),
             "blocks": blocks,
         }
@@ -726,30 +727,47 @@ async def find_by_hash(content_hash: str):
         raise HTTPException(500, f"Search failed: {e}")
 
 
+# src/api/routers/hybrid.py හි
+
 @router.post("/ledger/certified-copy")
 async def issue_certified_copy(req: CertifiedCopyRequest):
     """
     Issue a certified copy of an existing document.
-
-    The certified copy has the SAME content_hash as the original
-    but a DIFFERENT issued_at timestamp. This is the supervisor's
-    key insight: certified copies are NOT forgeries.
+    - Uses the SAME content_hash and metadata_hash as the original.
+    - Creates a NEW blockchain entry with document_type = "CERTIFIED_COPY".
     """
     try:
-        ledger = get_ledger()
-        block = ledger.add_certified_copy(
+        ledger = get_ledger(document_type=req.document_type)
+        
+        # 1. Original එක තිබේදැයි පරීක්ෂා කරන්න
+        original = ledger.get_document(req.original_doc_id)
+        if not original:
+            raise HTTPException(404, f"Original document not found: {req.original_doc_id}")
+        
+        # 2. Original එකේ document_status "ORIGINAL" ද යන්න පරීක්ෂා කරන්න
+        original_status = original.get("metadata", {}).get("document_status", "ORIGINAL")
+        if original_status != "ORIGINAL":
+            raise HTTPException(400, "Document is not an ORIGINAL, cannot create certified copy")
+        
+        # 3. Certified Copy එකක් සාදන්න (add_certified_copy ශ්‍රිතය හරහා)
+        new_block = ledger.add_certified_copy(
             original_doc_id=req.original_doc_id,
-            certifier=req.certifier,
+            certifier=req.certifier or "Registrar General's Office"
         )
+        
         return {
             "status": "ok",
-            "certified_copy": block,
-            "message": f"Certified copy issued for {req.original_doc_id}",
+            "message": "Certified copy issued successfully",
+            "original_doc_id": req.original_doc_id,
+            "new_doc_id": new_block["doc_id"],
+            "document_status": "CERTIFIED_COPY",
+            "issued_at": new_block["issued_at"],
+            "block_hash": new_block["block_hash"]
         }
-    except ValueError as e:
-        raise HTTPException(404, str(e))
     except Exception as e:
-        raise HTTPException(500, f"Certified copy issuance failed: {e}")
+        raise HTTPException(500, f"Certified copy creation failed: {e}")
+    
+
 
 
 @router.get("/ledger/export")
