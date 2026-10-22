@@ -119,3 +119,9 @@ openapi.json
 test_stamped_document.png
 test_verify.py
 test_data/
+analyze_rq3.py
+check_ledger.py
+results.json
+rq3_status_chart.png
+test_photocopy.py
+test_stamped_photocopy.png
