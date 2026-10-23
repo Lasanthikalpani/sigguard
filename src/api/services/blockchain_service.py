@@ -17,6 +17,17 @@ Design:
 """
 import hashlib
 import json
+# src/api/services/blockchain_service.py — imports වලට පසුව
+
+NODE_MAP = {
+    "BIRTH_CERTIFICATE": "ledger_birth_certs.json",
+    "LAND_DEED":         "ledger_land_deeds.json",
+    "NATIONAL_ID":       "ledger_national_ids.json",
+    "EDUCATION_CERT":    "ledger_education_certs.json",
+    "VEHICLE_REG":       "ledger_vehicle_reg.json",
+}
+
+LEDGER_DIR = "data/rq3_dataset/blockchain"
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional
@@ -31,15 +42,9 @@ class BlockchainLedger:
         if ledger_path:
             self.ledger_path = Path(ledger_path)
         elif document_type:
-            NODE_MAP = {
-                "BIRTH_CERTIFICATE": "ledger_birth_certs.json",
-                "LAND_DEED":         "ledger_land_deeds.json",
-                "NATIONAL_ID":       "ledger_national_ids.json",
-                "EDUCATION_CERT":    "ledger_education_certs.json",
-                "VEHICLE_REG":       "ledger_vehicle_reg.json",
-            }
+            # 🆕 Global NODE_MAP භාවිත කරන්න
             node_file = NODE_MAP.get(document_type, "ledger_unknown.json")
-            self.ledger_path = Path(f"data/rq3_dataset/blockchain/{node_file}")
+            self.ledger_path = Path(f"{LEDGER_DIR}/{node_file}")
         else:
             self.ledger_path = Path("data/blockchain/ledger.json")
         
@@ -280,3 +285,105 @@ def get_ledger(document_type: str = None) -> BlockchainLedger:
         else:
             _ledgers[key] = BlockchainLedger()
     return _ledgers[key]
+# src/api/services/blockchain_service.py අවසානයට
+
+import time
+
+# ============================================================
+# BENCHMARK: Single Chain (O(N)) vs Group-wise Nodes (O(N/k))
+# ============================================================
+# ============================================================
+# BENCHMARK: Single Chain (O(N)) vs Group-wise Nodes (O(N/k))
+# ============================================================
+def benchmark_single_chain_vs_group_wise(doc_id: str, document_type: str):
+    """
+    Compare Single Chain (O(N)) vs Group-wise Nodes (O(N/k)).
+    Returns the time taken for each.
+    """
+    import os
+    import json
+    import time
+
+    # 🆕 NODE_MAP සහ LEDGER_DIR ශ්‍රිතය තුළම නිර්වචනය කරන්න
+    NODE_MAP = {
+        "BIRTH_CERTIFICATE": "ledger_birth_certs.json",
+        "LAND_DEED":         "ledger_land_deeds.json",
+        "NATIONAL_ID":       "ledger_national_ids.json",
+        "EDUCATION_CERT":    "ledger_education_certs.json",
+        "VEHICLE_REG":       "ledger_vehicle_reg.json",
+    }
+    LEDGER_DIR = "data/rq3_dataset/blockchain"
+
+    # 1. Single Chain (සියලුම nodes එකට)
+    all_nodes = list(NODE_MAP.values())
+    
+    # 2. Group-wise Node (එක් node එකක් පමණි)
+    target_node = NODE_MAP.get(document_type, "ledger_unknown.json")
+    
+    # ============================================================
+    # --- Single Chain Simulation (O(N)) ---
+    # ============================================================
+    start_time = time.perf_counter()
+    total_blocks_scanned = 0
+    found_in = None
+    
+    for node_file in all_nodes:
+        node_path = os.path.join(LEDGER_DIR, node_file)
+        if not os.path.exists(node_path):
+            continue
+        
+        with open(node_path, 'r') as f:
+            data = json.load(f)
+        
+        # ගොනුවේ ව්‍යුහය dict එකක්ද ({"blocks": []}) නැත්නම් list එකක්ද යන්න පරීක්ෂා කරන්න
+        blocks = data.get("blocks", []) if isinstance(data, dict) else data
+        total_blocks_scanned += len(blocks)
+        
+        for block in blocks:
+            if block.get("doc_id") == doc_id or block.get("document_id") == doc_id:
+                found_in = node_file
+                # 🆕 මෙහි 'break' එකක් නොමැත. එබැවින් සියලුම ගොනු කියවයි.
+    
+    single_chain_time = time.perf_counter() - start_time
+    
+    # ============================================================
+    # --- Group-wise Node Simulation (O(N/k)) ---
+    # ============================================================
+    start_time = time.perf_counter()
+    target_blocks_scanned = 0
+    target_path = os.path.join(LEDGER_DIR, target_node)
+    
+    if os.path.exists(target_path):
+        with open(target_path, 'r') as f:
+            data = json.load(f)
+        blocks = data.get("blocks", []) if isinstance(data, dict) else data
+        target_blocks_scanned = len(blocks)
+        
+        for block in blocks:
+            if block.get("doc_id") == doc_id or block.get("document_id") == doc_id:
+                found_in = target_node
+                break   # ✅ මෙය රඳවා ගන්න (එක් node එකක් පමණි)
+    
+    group_wise_time = time.perf_counter() - start_time
+    
+    # ============================================================
+    # --- Speedup Calculation ---
+    # ============================================================
+    speedup = single_chain_time / group_wise_time if group_wise_time > 0 else 0
+    
+    return {
+        "doc_id": doc_id,
+        "document_type": document_type,
+        "single_chain": {
+            "time_ms": round(single_chain_time * 1000, 2),
+            "blocks_scanned": total_blocks_scanned,
+            "complexity": "O(N)"
+        },
+        "group_wise": {
+            "time_ms": round(group_wise_time * 1000, 2),
+            "blocks_scanned": target_blocks_scanned,
+            "complexity": "O(N/k)"
+        },
+        "speedup": round(speedup, 2),
+        "found_in": found_in
+    }

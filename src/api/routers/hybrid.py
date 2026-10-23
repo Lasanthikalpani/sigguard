@@ -942,3 +942,28 @@ async def verify_layer3(
         return result
     except Exception as e:
         raise HTTPException(500, f"Layer 3 verification failed: {e}")
+# src/api/routers/hybrid.py අවසානයට
+
+from src.api.services.blockchain_service import benchmark_single_chain_vs_group_wise
+
+class BenchmarkRequest(BaseModel):
+    doc_id: str
+    document_type: str = "BIRTH_CERTIFICATE"
+
+@router.post("/ledger/benchmark")
+async def benchmark_ledger(req: BenchmarkRequest):
+    """
+    Benchmark Single Chain (O(N)) vs Group-wise Nodes (O(N/k)).
+    """
+    try:
+        result = benchmark_single_chain_vs_group_wise(
+            doc_id=req.doc_id,
+            document_type=req.document_type
+        )
+        return {
+            "status": "ok",
+            "benchmark": result
+        }
+    except Exception as e:
+        raise HTTPException(500, f"Benchmark failed: {e}")
+    
