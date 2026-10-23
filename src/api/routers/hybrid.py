@@ -1002,3 +1002,35 @@ async def node_stats():
         }
     except Exception as e:
         raise HTTPException(500, f"Failed to get node stats: {e}")
+# src/api/routers/hybrid.py — අවසානයට
+
+from src.api.services.blockchain_service import non_repudiation_check, layer4_summary
+
+class Layer4Request(BaseModel):
+    doc_id: str
+    document_type: str = "BIRTH_CERTIFICATE"
+
+
+@router.post("/ledger/non-repudiation")
+async def check_non_repudiation(req: Layer4Request):
+    """
+    Verify RSA signature (Layer 4 Non-Repudiation).
+    """
+    try:
+        result = non_repudiation_check(req.doc_id, req.document_type)
+        return {"status": "ok", "result": result}
+    except Exception as e:
+        raise HTTPException(500, f"Non-repudiation check failed: {e}")
+
+
+@router.post("/ledger/layer4-summary")
+async def get_layer4_summary(req: Layer4Request):
+    """
+    Layer 4 Summary: RSA + Group-wise Nodes.
+    """
+    try:
+        result = layer4_summary(req.doc_id, req.document_type)
+        return {"status": "ok", "layer4": result}
+    except Exception as e:
+        raise HTTPException(500, f"Layer 4 summary failed: {e}")
+    

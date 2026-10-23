@@ -467,3 +467,112 @@ def get_node_stats():
         "attack_surface_single_chain_percent": 100.0,
         "nodes": node_stats
     }
+# ============================================================
+# LAYER 4: RSA NON-REPUDIATION (PDF Theory)
+# ============================================================
+
+def non_repudiation_check(doc_id: str, document_type: str = "BIRTH_CERTIFICATE"):
+    """
+    Verify that a document's RSA signature is valid.
+    This proves the issuer cannot deny signing the document.
+    PDF Layer 4 p.4: signature = RSA_SIGN(content_hash + metadata_hash, private_key)
+    """
+    import os
+    import json
+    from src.api.services.crypto_service import CryptoService
+    
+    NODE_MAP = {
+        "BIRTH_CERTIFICATE": "ledger_birth_certs.json",
+        "LAND_DEED":         "ledger_land_deeds.json",
+        "NATIONAL_ID":       "ledger_national_ids.json",
+        "EDUCATION_CERT":    "ledger_education_certs.json",
+        "VEHICLE_REG":       "ledger_vehicle_reg.json",
+    }
+    LEDGER_DIR = "data/rq3_dataset/blockchain"
+    
+    target_node = NODE_MAP.get(document_type, "ledger_unknown.json")
+    node_path = f"{LEDGER_DIR}/{target_node}"
+    
+    if not os.path.exists(node_path):
+        return {"error": f"Node not found: {target_node}"}
+    
+    with open(node_path, 'r') as f:
+        data = json.load(f)
+    blocks = data.get("blocks", []) if isinstance(data, dict) else data
+    
+    # සොයන්න
+    target_block = None
+    for block in blocks:
+        if block.get("doc_id") == doc_id or block.get("document_id") == doc_id:
+            target_block = block
+            break
+    
+    if not target_block:
+        return {"error": f"Document not found in {target_node}"}
+    
+    # RSA Verify
+    crypto = CryptoService()
+    content_hash = target_block.get("content_hash", "")
+    metadata_hash = target_block.get("metadata_hash", 
+                    target_block.get("metadata", {}).get("metadata_hash", ""))
+    signature_hex = target_block.get("sig_hash", target_block.get("signature", ""))
+    
+    is_valid = crypto.rsa_verify(signature_hex, content_hash, metadata_hash)
+    
+    return {
+        "doc_id": doc_id,
+        "document_type": document_type,
+        "issuer": target_block.get("issuer", ""),
+        "signature_valid": is_valid,
+        "non_repudiation": "PROVEN" if is_valid else "FAILED",
+        "legal_validity": (
+            "The issuer cannot deny signing this document." if is_valid 
+            else "Signature invalid — document may be forged."
+        ),
+        "theory": {
+            "formula": "signature = RSA_SIGN(content_hash + metadata_hash, private_key)",
+            "verify_formula": "RSA_VERIFY(signature, content_hash + metadata_hash, public_key)"
+        }
+    }
+
+
+def layer4_summary(doc_id: str, document_type: str = "BIRTH_CERTIFICATE"):
+    """
+    Layer 4 Summary: RSA + Group-wise Nodes.
+    Matches PDF p.9: "SigVerify is the first work to combine RSA signatures
+    with group-wise blockchain nodes."
+    """
+    # 1. Non-Repudiation
+    nr_result = non_repudiation_check(doc_id, document_type)
+    
+    # 2. Benchmark (O(N/k))
+    try:
+        benchmark = benchmark_single_chain_vs_group_wise(doc_id, document_type)
+    except Exception as e:
+        benchmark = {"error": str(e)}
+    
+    return {
+        "doc_id": doc_id,
+        "document_type": document_type,
+        "layer4_novelty": {
+            "novelty_1_rsa_group_wise": {
+                "status": "ACTIVE",
+                "description": "RSA signature + group-wise nodes (O(N/k))"
+            },
+            "novelty_2_non_repudiation": nr_result,
+            "novelty_3_node_specific_access": {
+                "status": "ACTIVE",
+                "description": "Land registry → Land Deeds only"
+            },
+            "novelty_4_fault_isolation": {
+                "status": "ACTIVE",
+                "attack_surface": "1/k × 100%",
+                "security_improvement": "Reduced by 80%"
+            }
+        },
+        "benchmark": benchmark,
+        "pdf_thesis": (
+            "SigVerify is the first work to combine RSA digital signatures "
+            "with group-wise blockchain nodes for government document verification."
+        )
+    }
