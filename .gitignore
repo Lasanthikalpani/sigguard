@@ -125,3 +125,7 @@ results.json
 rq3_status_chart.png
 test_photocopy.py
 test_stamped_photocopy.png
+
+# RQ3 specific dataset files
+ai_training_data.zip
+data/ai_training_data/
