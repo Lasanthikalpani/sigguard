@@ -167,6 +167,32 @@ class CopyService:
 
         # Step 5: Classify by ledger metadata
         meta = block.get("metadata", {})
+        # 🆕 AMENDED
+        if meta.get("document_status") == "AMENDED":
+            return self._result(
+                "AMENDED", doc_id=doc_id, hmac_valid=True,
+                content_hash_match=True, in_ledger=True,
+                original_doc_id=meta.get("amends"),
+                explanation=f"Amended document (amends {meta.get('amends')})",
+            )
+        
+        # CERTIFIED_COPY
+        if meta.get("is_certified_copy") or meta.get("document_status") == "CERTIFIED_COPY":
+            return self._result(
+                self.CERTIFIED_COPY, doc_id=doc_id, hmac_valid=True,
+                content_hash_match=True, in_ledger=True,
+                is_certified_copy=True,
+                original_doc_id=meta.get("copy_of"),
+                explanation=f"Certified copy of {meta.get('copy_of')}",
+            )
+        
+        # ORIGINAL
+        return self._result(
+            self.ORIGINAL, doc_id=doc_id, hmac_valid=True,
+            content_hash_match=True, in_ledger=True,
+            explanation="Registered original document",
+        )
+
         if meta.get("is_certified_copy"):
             return self._result(
                 self.CERTIFIED_COPY, doc_id=doc_id, hmac_valid=True,

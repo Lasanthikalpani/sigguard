@@ -2060,6 +2060,80 @@
         "copy_of": null
       },
       "block_hash": "2d9ecd2e3223b33bddcba5f365c9af4b4553c6954625a158ece62b349a620102"
+    },
+    {
+      "index": 133,
+      "doc_id": "BC-2020-000123",
+      "content_hash": "9af59a6be244320d2ff70a4214d4b0b75fa159515b7fb7077e086931b2da63a2",
+      "sig_hash": "aac674e8424b2101a820956ba4eaea0fe5586cef6bdfe77fa2207f21fc80f22d6fb3c6b3841ed30dff5acd525d8e134f282acc24f93ca145a3cc199583332f53a50633ed09918ec2392162c310f573b8985bbee95d1e8838f5509c774f7c1880fc6225865f6187e6ca14c7498b029a5077adf2101d5902dfc6a90ec2f8a1617cff01b136ef6d09ee42b1a195f68436d5c45df54da5d552872953735b14dd679dd4b6066022fa722126048f1d78444da7d526456fcf0413807dc7192c611be2b5e75df4d4b621195e4b31ef66c6aef8a9ca398650fefbab93c29091849f2096a76b8171cc50ef7011aff8a96131cc7952d3921be2615cd17f889550b8e593f20e",
+      "issuer": "Government of Sri Lanka",
+      "issued_at": "2026-10-22T16:34:39.234054Z",
+      "prev_hash": "2d9ecd2e3223b33bddcba5f365c9af4b4553c6954625a158ece62b349a620102",
+      "metadata": {
+        "document_type": "BIRTH_CERTIFICATE",
+        "document_status": "AMENDED",
+        "metadata_hash": "a291c22891a8da7344062d4eb86891e7fa14f33c196be49995b7a37646377fc7",
+        "phash": "1100100001101010101100111011000101101000101101011001010110010101",
+        "copy_of": null,
+        "superseded_by": "BC-2026-000456"
+      },
+      "block_hash": "175744fd8e8da250265e815d4ec2b8ff4f7b4ad06fcdad163949f355af75af7b"
+    },
+    {
+      "index": 134,
+      "doc_id": "BC-2026-000456",
+      "content_hash": "amended_content_BC-2026-000456",
+      "sig_hash": "amended_sig_BC-2026-000456",
+      "issuer": "Registrar General's Office",
+      "issued_at": "2026-10-22T16:35:40.946997Z",
+      "prev_hash": "175744fd8e8da250265e815d4ec2b8ff4f7b4ad06fcdad163949f355af75af7b",
+      "metadata": {
+        "document_type": "BIRTH_CERTIFICATE",
+        "document_status": "AMENDED",
+        "metadata_hash": "amended_content_BC-2026-000456",
+        "phash": "",
+        "amends": "BC-2020-000123",
+        "copy_of": null,
+        "amendment_reason": "surname_change"
+      },
+      "block_hash": "7d39a114e182d2f949dc1c76fc5d4b7862f5c02fc6924d0969613c1c75687422"
+    },
+    {
+      "index": 135,
+      "doc_id": "BC-2020-000124",
+      "content_hash": "9af59a6be244320d2ff70a4214d4b0b75fa159515b7fb7077e086931b2da63a2",
+      "sig_hash": "5512a465b88cbadf566d9a922f3e8c026c4dd0042045f19b03acf5425688e52bcabbcf2f2d7206ba28d32fcb365f9eee636ae29816eb44649d48b24ac44e22e7a2bfc63bbf07f366355f28f621bc0a1ab33df4da768c0c1c2884c4fe04d80bd1e0dcb271911941e081bcf5d277df7704f3e0e5887bc435097d3a7ef7fe873de9958322b0a35388426cc3e1c6ae20c8a6c5c18c254ba5fe6b666f49d9d84562fbbd8367240f3e2b1245377ec0738876f4429842e9a9a6d97a7da26853ecdb847c8bb16e0839c05154e8b7d2075a9fa5cd22176b40175c3ff970a3528094b050c48ebaf5551de86c9f169dbce7041527461ba0f161a59a6e10404e1268853c55cd",
+      "issuer": "Government of Sri Lanka",
+      "issued_at": "2026-10-22T16:56:55.867313Z",
+      "prev_hash": "7d39a114e182d2f949dc1c76fc5d4b7862f5c02fc6924d0969613c1c75687422",
+      "metadata": {
+        "document_type": "BIRTH_CERTIFICATE",
+        "document_status": "AMENDED",
+        "metadata_hash": "ea9b93b3bd1dab2474a8c6ddb55b52d1f868a961da3e0064ba96bcd0164b157c",
+        "phash": "1100100001101010101100111011000101101000100101011001010110010111",
+        "copy_of": null,
+        "superseded_by": "BC-2026-000457"
+      },
+      "block_hash": "a795671a3122057b490e5aa462fc3a0281269345f7d086861b8c6f046e6221be"
+    },
+    {
+      "index": 136,
+      "doc_id": "BC-2026-000457",
+      "content_hash": "amended_content_BC-2026-000457",
+      "sig_hash": "amended_sig_BC-2026-000457",
+      "issuer": "Registrar General's Office",
+      "issued_at": "2026-10-22T17:05:07.369716Z",
+      "prev_hash": "a795671a3122057b490e5aa462fc3a0281269345f7d086861b8c6f046e6221be",
+      "metadata": {
+        "document_type": "BIRTH_CERTIFICATE",
+        "document_status": "AMENDED",
+        "metadata_hash": "amended_content_BC-2026-000457",
+        "phash": "",
+        "amends": "BC-2020-000124",
+        "copy_of": null,
+        "amendment_reason": "surname_change"
+      },
+      "block_hash": "7fbab0e305b1a53436860200368fefa138af4f8df633b80645cdb0272a0c6984"
     }
   ],
   "genesis_hash": "7a03437e20556e0e24274dbf7ca3967d211db780bf129a1fb0344a26fc193c15"

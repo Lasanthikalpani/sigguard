@@ -830,7 +830,57 @@ async def issue_certified_copy(req: CertifiedCopyRequest):
     except Exception as e:
         raise HTTPException(500, f"Certified copy creation failed: {e}")
     
+class AmendDocumentRequest(BaseModel):
+    original_doc_id: str = Field(..., description="Original document ID")
+    new_doc_id: str = Field(..., description="New amended document ID")
+    document_type: str = Field("BIRTH_CERTIFICATE", description="Document type")
+    amendment_reason: str = Field("surname_change", description="Reason for amendment")
+    certifier: str = Field("Registrar General's Office", description="Issuing authority")
 
+
+@router.post("/ledger/amend-document")
+async def amend_document(req: AmendDocumentRequest):
+    """
+    Issue an AMENDED document (Layer 5).
+    - Creates a new block with document_type = 'AMENDED'
+    - Updates the original block with superseded_by
+    """
+    try:
+        ledger = get_ledger(document_type=req.document_type)
+
+        # Original එක තිබේදැයි පරීක්ෂා කරන්න
+        original = ledger.get_document(req.original_doc_id)
+        if not original:
+            raise HTTPException(404, f"Original document not found: {req.original_doc_id}")
+
+        # Original එකේ status "ORIGINAL" ද යන්න පරීක්ෂා කරන්න
+        original_status = original.get("metadata", {}).get("document_status", "ORIGINAL")
+        if original_status != "ORIGINAL":
+            raise HTTPException(400, "Document is not an ORIGINAL, cannot amend")
+
+        # 🆕 අලුත් AMENDED block එක සාදන්න
+        new_block = ledger.add_amendment(
+            original_doc_id=req.original_doc_id,
+            new_content_hash=f"amended_content_{req.new_doc_id}",
+            new_sig_hash=f"amended_sig_{req.new_doc_id}",
+            issuer=req.certifier,
+            new_doc_id=req.new_doc_id,
+            amendment_reason=req.amendment_reason,
+        )
+
+        return {
+            "status": "ok",
+            "message": "Amendment issued successfully",
+            "original_doc_id": req.original_doc_id,
+            "new_doc_id": req.new_doc_id,
+            "document_status": "AMENDED",
+            "amends": req.original_doc_id,
+            "superseded_by": req.new_doc_id,
+            "block_hash": new_block["block_hash"],
+        }
+    except Exception as e:
+        raise HTTPException(500, f"Amendment failed: {e}")
+    
 
 
 @router.get("/ledger/export")

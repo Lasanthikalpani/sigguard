@@ -161,45 +161,46 @@ class BlockchainLedger:
     # LAYER 5: DOCUMENT AMENDMENT
     # ============================================================
 
-    def add_amendment(
-        self,
-        original_doc_id: str,
-        new_content_hash: str,
-        new_sig_hash: str,
-        amendment_reason: str,
-        new_doc_id: Optional[str] = None,
-        issuer: str = "GovLK",
-        evidence: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
-        """Layer 5: Record a legitimate document amendment."""
+    def add_amendment(self, original_doc_id, new_content_hash, new_sig_hash,
+                      issuer, new_doc_id, amendment_reason, issued_at=None):
+        """
+        Add an AMENDED document to the blockchain.
+        Also updates the original block's document_type to 'AMENDED'
+        and sets 'superseded_by'.
+        """
+        # 1. Original block එක සොයන්න
         original = self.get_document(original_doc_id)
-        if original is None:
+        if not original:
             raise ValueError(f"Original document not found: {original_doc_id}")
 
-        if new_doc_id is None:
-            existing = self.get_amendments(original_doc_id)
-            new_doc_id = f"{original_doc_id}-AMD-{len(existing) + 1:03d}"
+        # 2. Original block එක update කරන්න (superseded_by)
+        original["metadata"]["document_status"] = "AMENDED"
+        original["metadata"]["superseded_by"] = new_doc_id
 
-        prev_block = self.chain[-1]
+        # 3. අලුත් AMENDED block එක සාදන්න
         new_block = {
             "index": len(self.chain),
             "doc_id": new_doc_id,
             "content_hash": new_content_hash,
             "sig_hash": new_sig_hash,
             "issuer": issuer,
-            "issued_at": datetime.utcnow().isoformat() + "Z",
-            "prev_hash": prev_block["block_hash"],
+            "issued_at": issued_at or datetime.utcnow().isoformat() + "Z",
+            "prev_hash": self.chain[-1]["block_hash"],
             "metadata": {
-                "is_amendment": True,
-                "original_doc_id": original_doc_id,
+                "document_type": original["metadata"].get("document_type", "BIRTH_CERTIFICATE"),
+                "document_status": "AMENDED",
+                "metadata_hash": new_content_hash,  # New metadata hash
+                "phash": "",  # Amended documents may not have pHash
+                "amends": original_doc_id,
+                "copy_of": None,
                 "amendment_reason": amendment_reason,
-                "evidence": evidence or {},
-            },
+            }
         }
         new_block["block_hash"] = self._compute_block_hash(new_block)
         self.chain.append(new_block)
         self._save()
         return new_block
+    
 
     def get_amendments(self, original_doc_id: str) -> List[Dict[str, Any]]:
         """Return all amendment blocks for a given original document."""
