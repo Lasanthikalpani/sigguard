@@ -371,19 +371,99 @@ def benchmark_single_chain_vs_group_wise(doc_id: str, document_type: str):
     # ============================================================
     speedup = single_chain_time / group_wise_time if group_wise_time > 0 else 0
     
+        # --- PDF Theory: Attack Surface Calculation ---
+    # PDF: Attack surface reduced from 100% to 1/k * 100%
+    num_categories = len(NODE_MAP) if 'NODE_MAP' in locals() else 5
+    attack_surface_group_wise = round((1 / num_categories) * 100, 2)
+    
     return {
         "doc_id": doc_id,
         "document_type": document_type,
         "single_chain": {
             "time_ms": round(single_chain_time * 1000, 2),
             "blocks_scanned": total_blocks_scanned,
-            "complexity": "O(N)"
+            "complexity": "O(N)",
+            "attack_surface_percent": 100.0
         },
         "group_wise": {
             "time_ms": round(group_wise_time * 1000, 2),
             "blocks_scanned": target_blocks_scanned,
-            "complexity": "O(N/k)"
+            "complexity": "O(N/k)",
+            "attack_surface_percent": attack_surface_group_wise
         },
         "speedup": round(speedup, 2),
-        "found_in": found_in
+        "found_in": found_in,
+        # 🆕 PDF හි ගණිතමය සාධනය (Mathematical Proof)
+        "pdf_theory_proof": {
+            "single_chain_complexity": "O(N)",
+            "group_wise_complexity": "O(N/k)",
+            "speedup_formula": "T_single / T_group = k",
+            "theoretical_speedup_k": num_categories,
+            "actual_speedup": round(speedup, 2),
+            "attack_surface_single_chain": "100%",
+            "attack_surface_group_wise": f"{attack_surface_group_wise}%",
+            "security_improvement": f"Reduced by {round(100 - attack_surface_group_wise, 2)}%"
+        }
+    }
+
+# src/api/services/blockchain_service.py — අවසානයට
+
+# ============================================================
+# GROUP-WISE NODES: BENEFITS (PDF Theory Implementation)
+# ============================================================
+
+# 🆕 Role-Based Access Control (RBAC)
+ROLE_ACCESS = {
+    "REGISTRAR":     ["BIRTH_CERTIFICATE", "EDUCATION_CERT"],
+    "LAND_REGISTRY": ["LAND_DEED"],
+    "IMMIGRATION":   ["NATIONAL_ID"],
+    "VEHICLE_DEPT":  ["VEHICLE_REG"],
+    "AUDITOR":       ["*"],  # සියල්ලට ප්‍රවේශය
+}
+
+def check_access(role: str, document_type: str) -> bool:
+    """Check if a role has access to a specific document category."""
+    if role not in ROLE_ACCESS:
+        return False
+    allowed = ROLE_ACCESS[role]
+    return "*" in allowed or document_type in allowed
+
+
+def get_node_stats():
+    """Return stats for each group-wise node (Scalability & Security)."""
+    import os
+    import json
+    
+    NODE_MAP = {
+        "BIRTH_CERTIFICATE": "ledger_birth_certs.json",
+        "LAND_DEED":         "ledger_land_deeds.json",
+        "NATIONAL_ID":       "ledger_national_ids.json",
+        "EDUCATION_CERT":    "ledger_education_certs.json",
+        "VEHICLE_REG":       "ledger_vehicle_reg.json",
+    }
+    LEDGER_DIR = "data/rq3_dataset/blockchain"
+    total_blocks = 0
+    node_stats = {}
+    
+    for doc_type, node_file in NODE_MAP.items():
+        node_path = os.path.join(LEDGER_DIR, node_file)
+        block_count = 0
+        if os.path.exists(node_path):
+            with open(node_path, 'r') as f:
+                data = json.load(f)
+            blocks = data.get("blocks", []) if isinstance(data, dict) else data
+            block_count = len(blocks)
+        node_stats[doc_type] = {
+            "file": node_file,
+            "blocks": block_count,
+            "attack_surface_percent": round(100 / len(NODE_MAP), 2)
+        }
+        total_blocks += block_count
+    
+    return {
+        "total_blocks": total_blocks,
+        "num_categories": len(NODE_MAP),
+        "attack_surface_per_node_percent": round(100 / len(NODE_MAP), 2),
+        "attack_surface_single_chain_percent": 100.0,
+        "nodes": node_stats
     }

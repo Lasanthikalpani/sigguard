@@ -966,4 +966,39 @@ async def benchmark_ledger(req: BenchmarkRequest):
         }
     except Exception as e:
         raise HTTPException(500, f"Benchmark failed: {e}")
-    
+# src/api/routers/hybrid.py — අවසානයට
+
+from src.api.services.blockchain_service import check_access, get_node_stats
+
+class AccessCheckRequest(BaseModel):
+    role: str
+    document_type: str
+
+
+@router.post("/ledger/check-access")
+async def check_role_access(req: AccessCheckRequest):
+    """
+    Check if a role has access to a document category (Access Control).
+    """
+    allowed = check_access(req.role, req.document_type)
+    return {
+        "role": req.role,
+        "document_type": req.document_type,
+        "allowed": allowed,
+        "message": "Access granted" if allowed else "Access denied"
+    }
+
+
+@router.get("/ledger/node-stats")
+async def node_stats():
+    """
+    Return per-node stats: block counts, attack surface (Security).
+    """
+    try:
+        stats = get_node_stats()
+        return {
+            "status": "ok",
+            "stats": stats
+        }
+    except Exception as e:
+        raise HTTPException(500, f"Failed to get node stats: {e}")
