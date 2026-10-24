@@ -129,3 +129,6 @@ test_stamped_photocopy.png
 # RQ3 specific dataset files
 ai_training_data.zip
 data/ai_training_data/
+
+data/ai_training_data_b3_aug/
+b3_training_data.zip
